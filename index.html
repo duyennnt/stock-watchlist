@@ -177,6 +177,25 @@
   .modal .mprice{font-family:var(--mono);font-size:20px;font-weight:600}
   .modal .msec-title{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:16px 0 8px}
   .modal .mbox{border:1px solid var(--line);border-radius:12px;background:var(--bg2);overflow:hidden}
+  .news-item{display:block;padding:9px 12px;border-bottom:1px solid var(--line);text-decoration:none}
+  .news-item:last-child{border-bottom:0}
+  .news-item:hover{background:rgba(255,255,255,.03)}
+  .news-item .nh{font-size:12.5px;color:var(--ink);line-height:1.35}
+  .news-item .nm{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:3px}
+  .cfield{font-family:var(--body);font-size:12px;color:var(--ink);background:var(--surface2);border:1px solid var(--line);
+    border-radius:7px;padding:5px 8px;width:100%;outline:none}
+  .cfield:focus{border-color:var(--accent)}
+  .scr-table{width:100%;border-collapse:collapse;margin:10px 0 4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .scr-table th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+    text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  .scr-table td{font-family:var(--mono);font-size:12px;padding:7px 10px;border-bottom:1px solid var(--line);color:var(--ink)}
+  .scr-table tr:last-child td{border-bottom:0}
+  .scr-table .good{color:var(--pos)}
+  .scr-add{font-family:var(--mono);font-size:10px;color:var(--pos);border:1px solid rgba(64,185,138,.4);background:transparent;
+    border-radius:6px;padding:3px 8px;cursor:pointer}
+  .scr-add:hover{background:rgba(64,185,138,.12)}
+  .scr-bar{height:4px;background:var(--surface2);border-radius:4px;overflow:hidden;margin-top:8px;width:100%}
+  .scr-bar i{display:block;height:100%;background:var(--pos);width:0%;transition:width .3s}
   select.rank.r1,select.rank.gA{color:var(--pos);border-color:rgba(64,185,138,.5)}
   select.rank.r2{color:#8fd6b4}
   select.rank.r3,select.rank.gB{color:var(--warn)}
@@ -197,6 +216,22 @@
   <div class="note"><b>Live prices, once you add a free key.</b> Paste a free <a href="https://finnhub.io/register" target="_blank" rel="noopener" style="color:var(--accent)">Finnhub API key</a> below and the dashboard fetches live quotes for every ticker; without one it stays in manual mode with our research prices (see each card's "as of" date). Your key is stored only in this browser — it's never written into the code or the repo, so don't paste it into the file or commit it.</div>
 
   <div class="strip" id="strip"></div>
+
+  <div class="live-bar" style="border-left:2px solid var(--pos);row-gap:8px">
+    <span class="live-eyebrow" style="color:var(--pos)">Lynch screener</span>
+    <button class="btn go" id="runScreen" style="color:var(--pos);border-color:rgba(64,185,138,.5)">▶ Find fast growers</button>
+    <button class="btn" id="stopScreen" style="display:none">■ Stop</button>
+    <span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">PEG ≤</span>
+    <input class="gr-in" id="cPeg" type="number" step="0.1" min="0.1" style="width:52px" value="1.0">
+    <span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">growth</span>
+    <input class="gr-in" id="cGmin" type="number" step="1" style="width:48px" value="20">
+    <span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">–</span>
+    <input class="gr-in" id="cGmax" type="number" step="1" style="width:48px" value="50">
+    <span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">% · D/E ≤</span>
+    <input class="gr-in" id="cDte" type="number" step="0.05" min="0" style="width:56px" value="0.33">
+    <span class="status" id="scrStatus">Dividend-adjusted PEG · shuffled universe · checked names cached 24h, so each run digs deeper</span>
+  </div>
+  <div id="scrResults"></div>
 
   <div class="controls">
     <div class="chips" id="tierChips">
@@ -284,6 +319,10 @@ const DATA=[
   cat:'BKR9500 FCC approval 2H26, shipments 1H27 · Q2 earnings ~Aug 13',ins:'neu',
   risk:'Tiny ~3.7M-share float; the real catalyst is a 2027 event',asOf:"Jun 30 '26",url:'BKTI'},
 
+ {t:'CSCO',n:'Cisco Systems',tier:2,sec:'Networking / AI Infra',tags:['Networking','AI','Momentum'],p:112.69,eps:3.00,gr:12,ipe:22,tgt:127,lo:null,hi:120.41,
+  cat:'Q4 FY26 earnings ~mid-Aug · $9B AI-order trajectory · div ex-date Jul 6',ins:'sell',
+  risk:'~38x trailing P/E after 33% YTD run; gross-margin squeeze from memory costs; net insider selling',asOf:"Jul 2 '26",url:'CSCO'},
+
  {t:'SOFI',n:'SoFi Technologies',tier:3,sec:'Fintech',tags:['Fintech','Growth','Contested'],p:16.24,eps:0.50,gr:30,ipe:14,tgt:21.5,lo:null,hi:null,
   cat:'Q2 earnings ~Jul 28–29 · tech-platform segment recovery',ins:'buy',
   risk:'Muddy Waters short thesis on earnings quality; tech platform −27%',asOf:"Jun '26",url:'SOFI'},
@@ -319,6 +358,8 @@ function loadCustoms(){
   let raw=null;
   try{ raw=localStorage.getItem(CKEY); }catch(e){ raw=memCustom; }
   if(raw){ try{ customs=JSON.parse(raw)||[]; }catch(e){ customs=[]; } }
+  // if a ticker was later added as a researched built-in, drop the custom duplicate
+  customs=customs.filter(c=>!DATA.some(d=>d.t===c.t));
 }
 function saveCustoms(){
   const v=JSON.stringify(customs);
@@ -362,8 +403,77 @@ function getKey(){ try{ return localStorage.getItem(AKEY)||''; }catch(e){ return
 function setKey(v){ try{ localStorage.setItem(AKEY,v); }catch(e){ memKey=v; } }
 function setStatus(msg,cls){ const el=document.getElementById('status'); el.textContent=msg; el.className='status'+(cls?' '+cls:''); }
 
-async function fetchQuote(symbol,key){
-  const url=`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(key)}`;
+async function fetchMetrics(symbol,key){
+  const r=await fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all&token=${encodeURIComponent(key)}`);
+  if(!r.ok) return null;
+  const j=await r.json(); const m=j&&j.metric?j.metric:null; if(!m)return null;
+  const pick=(...ks)=>{ for(const k of ks){ const v=Number(m[k]); if(!isNaN(v)&&v!==0) return v; } return null; };
+  return {
+    eps: pick('epsTTM','epsBasicExclExtraItemsTTM','epsInclExtraItemsTTM','epsNormalizedAnnual'),
+    hi: pick('52WeekHigh'),
+    lo: pick('52WeekLow')
+  };
+}
+const newsMem={};
+const NEWS_HOT=[['earnings',5],['guidance',5],['upgrade',4],['downgrade',4],['price target',4],['acqui',5],['merger',5],['buyout',5],['contract',3],['partnership',3],['fda',5],['approval',4],['lawsuit',3],['sec ',3],['dividend',3],['buyback',3],['insider',3],['ai ',2],['revenue',3],['forecast',3],['beats',4],['misses',4],['raises',4],['cuts',4],['ceo',3],['launch',2]];
+function pickTopNews(items,n=3){
+  const now=Date.now();
+  return items.map(x=>{
+    let sc=0; const h=(x.h||'').toLowerCase();
+    NEWS_HOT.forEach(([k,w])=>{ if(h.includes(k))sc+=w; });
+    sc += Math.max(0, 4-(now-x.t)/(3.5*24*3600e3)); // recency bonus
+    return {...x,sc};
+  }).sort((a,b)=>b.sc-a.sc).slice(0,n);
+}
+async function fetchNews(sym){
+  if(newsMem[sym] && Date.now()-newsMem[sym].ts<15*60e3) return newsMem[sym].items;
+  const key=getKey(); if(!key)throw new Error('no-key');
+  const to=new Date(), from=new Date(Date.now()-14*24*3600e3);
+  const fmt=d=>d.toISOString().slice(0,10);
+  const r=await fetch(`https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(sym)}&from=${fmt(from)}&to=${fmt(to)}&token=${encodeURIComponent(key)}`);
+  if(!r.ok)throw new Error('http-'+r.status);
+  const j=await r.json();
+  const items=(Array.isArray(j)?j:[]).slice(0,25).map(x=>({h:x.headline,s:x.source,t:x.datetime*1000,u:x.url}));
+  newsMem[sym]={ts:Date.now(),items};
+  return items;
+}
+async function fetchRecs(sym,key){
+  const r=await fetch(`https://finnhub.io/api/v1/stock/recommendation?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(key)}`);
+  if(!r.ok)return null; const j=await r.json();
+  return (Array.isArray(j)&&j.length)?j[0]:null; // latest month
+}
+function buildAutoPoints(d,recs,insiderNet){
+  const pts=[];
+  const p=num(d.p), e=num(d.eps), lo=num(d.lo), hi=num(d.hi);
+  if(p!==null&&e!==null&&e>0){
+    const pe=p/e; let s='P/E '+pe.toFixed(1)+'× trailing';
+    let pos=null;
+    if(lo!==null&&hi!==null&&hi>lo){ pos=(p-lo)/(hi-lo)*100; s+=' · '+pos.toFixed(0)+'% of 52-wk range'; }
+    if(pe>=30&&(pos===null||pos>60)) s+=' — rich multiple near highs; growth must deliver';
+    else if(pe>=30) s+=' — premium multiple; priced for growth';
+    else if(pe<15&&(pos!==null&&pos<40)) s+=' — cheap near lows; find out why before assuming bargain';
+    else if(pe<15) s+=' — modest multiple; check for a value-trap reason';
+    pts.push(s);
+  } else if(e!==null&&e<=0){ pts.push('No earnings (negative EPS) — valuation rests on the story; Lynch\'s "long shot" category'); }
+  if(recs){
+    const b=(recs.strongBuy||0)+(recs.buy||0), h=recs.hold||0, s2=(recs.sell||0)+(recs.strongSell||0);
+    const cons = b>h&&b>s2?'Buy':s2>b?'Sell':'Hold';
+    pts.push('Street: '+b+' buy / '+h+' hold / '+s2+' sell — consensus '+cons+(b>h*2?'; heavily covered, little neglect edge':''));
+  }
+  if(insiderNet!==null&&insiderNet!==undefined){
+    if(insiderNet>0) pts.push('Net insider BUYING last 90 days — insiders buy for only one reason');
+    else if(insiderNet<0) pts.push('Net insider selling last 90 days — not necessarily bearish, but no confirmation');
+  }
+  if((!d.risk||d.risk.startsWith('—'))){
+    if(p!==null&&e!==null&&e>0){
+      const pe=p/e; const pos=(lo!==null&&hi!==null&&hi>lo)?(p-lo)/(hi-lo)*100:null;
+      if(pe>=30&&pos!==null&&pos>66) d.risk='Rich multiple ('+pe.toFixed(0)+'×) near 52-wk highs — priced for perfection';
+      else if(pe<15) d.risk='Low multiple can mean value or decline — identify which before buying';
+    } else if(e!==null&&e<=0) d.risk='Pre-profit: binary on execution/catalysts; size the position accordingly';
+  }
+  return pts.slice(0,3);
+}
+async function fetchQuote(symbol,key){  const url=`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(key)}`;
   const r=await fetch(url);
   if(r.status===401||r.status===403) throw new Error('bad-key');
   if(r.status===429) throw new Error('rate-limit');
@@ -428,6 +538,27 @@ async function addTicker(){
         const pr=await fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(key)}`);
         if(pr.ok){ const pj=await pr.json(); if(pj&&pj.name) entry.n=pj.name; if(pj&&pj.finnhubIndustry) entry.sec=pj.finnhubIndustry; }
       }catch(e){}
+      try{
+        const mt=await fetchMetrics(sym,key);
+        if(mt){ if(mt.eps!==null)entry.eps=mt.eps; if(mt.lo!==null)entry.lo=mt.lo; if(mt.hi!==null)entry.hi=mt.hi; }
+      }catch(e){}
+      try{ entry.news=pickTopNews(await fetchNews(sym)); }catch(e){}
+      let recs=null, insNet=null;
+      try{ recs=await fetchRecs(sym,key); }catch(e){}
+      try{
+        const it=await fetch(`https://finnhub.io/api/v1/stock/insider-transactions?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(key)}`);
+        if(it.ok){ const ij=await it.json(); const cut=Date.now()-90*24*3600e3;
+          insNet=(ij.data||[]).filter(x=>new Date(x.transactionDate).getTime()>cut)
+            .reduce((a,x)=>a+(Number(x.change)||0),0);
+          entry.ins = insNet>0?'buy':insNet<0?'sell':'neu'; }
+      }catch(e){}
+      entry.points=buildAutoPoints(entry,recs,insNet);
+      try{
+        const fmt=x=>x.toISOString().slice(0,10);
+        const ec=await fetch(`https://finnhub.io/api/v1/calendar/earnings?from=${fmt(new Date())}&to=${fmt(new Date(Date.now()+120*24*3600e3))}&symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(key)}`);
+        if(ec.ok){ const ej=await ec.json(); const ev=(ej.earningsCalendar||[])[0];
+          if(ev&&ev.date) entry.cat='Earnings ~ '+new Date(ev.date).toLocaleDateString([],{month:'short',day:'numeric'}); }
+      }catch(e){}
     }catch(e){ if(e.message==='bad-key'){ setAddStatus('API key rejected — added in manual mode','err'); } }
   }
   customs.push(entry); saveCustoms();
@@ -475,17 +606,29 @@ function card(d){
         <div class="co">${d.n}</div>
         <div class="sec">${d.sec}</div>
       </div>
-      <div style="display:flex;gap:6px;align-items:flex-start">
+      <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap;justify-content:flex-end">
         <button class="chart-btn" data-full="${d.t}" title="Full view">⤢ Full</button>
         <button class="chart-btn" data-vchart="${d.t}">▾ Value</button>
         <button class="chart-btn" data-chart="${d.t}">▾ Chart</button>
+        <button class="chart-btn" data-news="${d.t}">▾ News</button>
         <a class="quote" href="https://finance.yahoo.com/quote/${d.url}" target="_blank" rel="noopener">Live quote ↗</a>
       </div>
     </div>
+    <div class="chart-box" data-newsbox="${d.t}"></div>
     <div class="chart-box" data-vchartbox="${d.t}"></div>
     <div class="chart-box" data-chartbox="${d.t}"></div>
-    <div class="tags">${d.tags.map(x=>`<span class="tag">${x}</span>`).join('')}${d.custom?`<button class="tag" data-rm="${d.t}" title="Remove from watchlist" style="cursor:pointer;color:var(--neg);border-color:rgba(229,107,95,.4);background:transparent">✕ remove</button>`:''}</div>
+    <div class="tags">${d.tags.map(x=>`<span class="tag">${x}</span>`).join('')}${d.custom?`<button class="tag" data-rm="${d.t}" title="Remove from watchlist" style="cursor:pointer;color:var(--neg);border-color:rgba(229,107,95,.4);background:transparent">✕ remove</button><button class="tag" data-fill="${d.t}" title="Auto-fill EPS & 52-week range from Finnhub" style="cursor:pointer;color:var(--pos);border-color:rgba(64,185,138,.4);background:transparent">↻ autofill</button>`:''}</div>
     ${d.custom?`<div class="metrics" style="grid-template-columns:1fr 1fr 1fr 1fr">${[['tgt','Target $'],['eps','EPS ttm'],['lo','52w low'],['hi','52w high']].map(([f,l])=>`<div class="m"><div class="mk">${l}</div><input class="price-in" style="width:100%;font-size:13px;padding:4px 6px" type="number" step="0.01" inputmode="decimal" value="${d[f]??''}" data-tkr="${d.t}" data-field="${f}" placeholder="—"></div>`).join('')}</div>`:''}
+    ${d.custom&&d.points&&d.points.length?`<div style="border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:9px;padding:8px 10px">
+      <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:4px">Auto research</div>
+      ${d.points.map(pt=>`<div style="font-size:12px;color:var(--ink);line-height:1.45;margin-top:3px">· ${pt.replace(/</g,'&lt;')}</div>`).join('')}
+    </div>`:''}
+    ${d.custom&&d.news&&d.news.length?`<div style="border:1px solid var(--line);border-radius:9px;overflow:hidden">
+      <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:6px 10px 2px">Research headlines</div>
+      ${d.news.map(n=>`<a class="news-item" style="padding:6px 10px" href="${n.u}" target="_blank" rel="noopener">
+        <div class="nh" style="font-size:12px">${(n.h||'').replace(/</g,'&lt;')}</div>
+        <div class="nm">${n.s||''} · ${new Date(n.t).toLocaleDateString([],{month:'short',day:'numeric'})}</div></a>`).join('')}
+    </div>`:''}
     <div class="price-row">
       <label>Price $</label>
       <input class="price-in" type="number" step="0.01" inputmode="decimal" value="${p??''}" data-tkr="${d.t}" placeholder="add">
@@ -512,8 +655,8 @@ function card(d){
           : `<span class="lprem none">${num(d.eps)===null||d.eps<=0?'no earnings — no line':'set multiple'}</span>`}
       </div>`; })()}
     <div class="foot">
-      <div class="cat"><span class="clbl">Next catalyst</span>${d.cat}</div>
-      <div class="risk"><span class="clbl">Key risk</span>${d.risk}</div>
+      <div class="cat"><span class="clbl">Next catalyst</span>${d.custom?`<input class="cfield" data-tkr="${d.t}" data-cfield="cat" value="${(d.cat||'').replace(/"/g,'&quot;')}" placeholder="e.g. Q2 earnings Aug 13">`:d.cat}</div>
+      <div class="risk"><span class="clbl">Key risk</span>${d.custom?`<input class="cfield" data-tkr="${d.t}" data-cfield="risk" value="${(d.risk||'').replace(/"/g,'&quot;')}" placeholder="the one thing that breaks the thesis">`:d.risk}</div>
       <span class="insider ${d.ins}">${insTxt}</span>
       <div class="ranks">
         <span class="rank-lbl">Safety</span>
@@ -579,6 +722,70 @@ function wire(){
   });
   document.querySelectorAll('.price-in[data-field]').forEach(inp=>{
     inp.addEventListener('blur',()=>render());
+  });
+  document.querySelectorAll('.chart-btn[data-news]').forEach(btn=>{
+    btn.addEventListener('click',async e=>{
+      const t=e.target.dataset.news;
+      const box=document.querySelector(`.chart-box[data-newsbox="${t}"]`);
+      if(!box)return;
+      const open=box.classList.toggle('show');
+      e.target.classList.toggle('open',open);
+      e.target.textContent = open?'▴ News':'▾ News';
+      if(!open)return;
+      box.style.minHeight='0';
+      if(!getKey()){ box.innerHTML='<div class="loadin">News needs the Finnhub key (Live prices bar)</div>'; return; }
+      box.innerHTML='<div class="loadin">Loading recent news…</div>';
+      try{
+        const items=await fetchNews(t);
+        box.innerHTML = items.length
+          ? items.slice(0,6).map(n=>`<a class="news-item" href="${n.u}" target="_blank" rel="noopener">
+              <div class="nh">${(n.h||'').replace(/</g,'&lt;')}</div>
+              <div class="nm">${n.s||''} · ${new Date(n.t).toLocaleDateString([],{month:'short',day:'numeric'})}</div></a>`).join('')
+          : '<div class="loadin">No news in the last 14 days</div>';
+      }catch(err){ box.innerHTML='<div class="loadin">Couldn\'t load news — try again shortly</div>'; }
+    });
+  });
+  document.querySelectorAll('.cfield').forEach(inp=>{
+    inp.addEventListener('input',e=>{
+      const t=e.target.dataset.tkr, f=e.target.dataset.cfield;
+      const d=customs.find(x=>x.t===t); if(!d)return;
+      d[f]=e.target.value; saveCustoms();
+    });
+  });
+  document.querySelectorAll('[data-fill]').forEach(b=>{
+    b.addEventListener('click',async e=>{
+      const sym=e.target.dataset.fill; const key=getKey();
+      if(!key){ setAddStatus('Save a Finnhub key first — autofill needs it','err'); return; }
+      const d=customs.find(x=>x.t===sym); if(!d)return;
+      e.target.textContent='…';
+      try{
+        const mt=await fetchMetrics(sym,key);
+        if(mt){ if(mt.eps!==null)d.eps=mt.eps; if(mt.lo!==null)d.lo=mt.lo; if(mt.hi!==null)d.hi=mt.hi; }
+        try{ const pr=await fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(key)}`);
+          if(pr.ok){ const pj=await pr.json(); if(pj&&pj.name)d.n=pj.name; if(pj&&pj.finnhubIndustry)d.sec=pj.finnhubIndustry; } }catch(x){}
+        // next earnings date → catalyst
+        try{
+          const fmt=x=>x.toISOString().slice(0,10);
+          const ec=await fetch(`https://finnhub.io/api/v1/calendar/earnings?from=${fmt(new Date())}&to=${fmt(new Date(Date.now()+120*24*3600e3))}&symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(key)}`);
+          if(ec.ok){ const ej=await ec.json(); const ev=(ej.earningsCalendar||[])[0];
+            if(ev&&ev.date&&(!d.cat||d.cat.startsWith('—'))) d.cat='Earnings ~ '+new Date(ev.date).toLocaleDateString([],{month:'short',day:'numeric'}); }
+        }catch(x){}
+        // insider net activity (last ~3 months) → chip
+        let insNet=null;
+        try{
+          const it=await fetch(`https://finnhub.io/api/v1/stock/insider-transactions?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(key)}`);
+          if(it.ok){ const ij=await it.json(); const cut=Date.now()-90*24*3600e3;
+            insNet=(ij.data||[]).filter(x=>new Date(x.transactionDate).getTime()>cut)
+              .reduce((a,x)=>a+(Number(x.change)||0),0);
+            d.ins = insNet>0?'buy':insNet<0?'sell':'neu'; }
+        }catch(x){}
+        // refresh research headlines + auto points
+        try{ d.news=pickTopNews(await fetchNews(sym)); }catch(x){}
+        try{ const recs=await fetchRecs(sym,key); d.p=state[sym]?.price??d.p; d.points=buildAutoPoints(d,recs,insNet); }catch(x){}
+        saveCustoms(); render();
+        setAddStatus(sym+' autofilled: '+(mt&&mt.eps!==null?('EPS '+mt.eps.toFixed(2)):'no EPS')+(mt&&mt.lo!==null?(' · 52w $'+mt.lo.toFixed(0)+'–$'+(mt.hi||0).toFixed(0)):''),'ok');
+      }catch(err){ e.target.textContent='↻ autofill'; setAddStatus('Autofill failed for '+sym,'err'); }
+    });
   });
   document.querySelectorAll('[data-rm]').forEach(b=>{
     b.addEventListener('click',e=>{
@@ -852,6 +1059,148 @@ async function openFull(t){
     catch(err){ lbox.innerHTML='<div class="loadin">'+(err.message==='rate-limit'?'AV daily limit — projection shown':'History unavailable — projection shown')+'</div>'+lynchSVG(t); }
   } else lbox.innerHTML='<div class="loadin">Projection (add a history key for the 15-yr chart)</div>'+lynchSVG(t);
 }
+// ---- Lynch fast-grower screener (port of lynch_screener_3.py, v2) ----
+function lynchCrit(){
+  const v=(id,dflt)=>{ const x=Number(document.getElementById(id)?.value); return isNaN(x)?dflt:x; };
+  const c={peg_max:v('cPeg',1.0), g_min:v('cGmin',20), g_max:v('cGmax',50), dte_max:v('cDte',0.33)};
+  try{ localStorage.setItem('lynch_crit',JSON.stringify(c)); }catch(e){}
+  return c;
+}
+function restoreCrit(){
+  try{ const c=JSON.parse(localStorage.getItem('lynch_crit')||'null'); if(!c)return;
+    const set=(id,val)=>{ const el=document.getElementById(id); if(el&&val!=null)el.value=val; };
+    set('cPeg',c.peg_max); set('cGmin',c.g_min); set('cGmax',c.g_max); set('cDte',c.dte_max);
+  }catch(e){}
+}
+// Curated liquid small/mid-cap universe (edit freely). Big tech excluded per the script.
+const UNIVERSE=['ELF','CELH','DECK','CROX','ULTA','LULU','ONON','DUOL','TTD','MNDY','GLBE','WIX','DOCS','PCTY','PAYC','TNET','EXLS','HRMY','CPRX','HALO','ADMA','LNTH','MEDP','AXSM','KRYS','VCEL','PRCT','TMDX','INSP','IRMD','ELMD','VMD','BKTI','CRAI','HURN','FIX','IESC','STRL','ROAD','GMS','DY','MLI','AAON','CSWI','TREX','WING','CAVA','TXRH','SHAK','LTH','PLNT','BOOT','ANF','AEO','URBN','WSM','FND','DKS','OLLI','FIVE','BROS','TOST','APPF','GWRE','MANH','TYL','DSGX','CVLT','QLYS','TENB','CYBR','NET','DDOG','ZS','CRWD','MDB','ESTC','GTLB','IOT','CFLT','BRZE','PD','ASAN','DOCN','FSLY','AKAM','JKHY','EPAM','GLOB','DAVA','NSP','KFY','RHI','HSII','ASGN','ICFI','FORR','VRNS','RPD','SPSC','ALRM','ITRI','BMI','WTS','ZWS','XYL','SITE','WMS','AZEK','DOOR','SSD','BLDR','EXP','ROCK','APOG','PATK','LCII','DORM','SMP','ALSN','GTES','TKR','AIT','FAST','WCC','MSM','PNR','FELE','FLS','ITT','CW','HEI','WWD','AXON','KTOS','AVAV','MRCY','LDOS','CACI','SAIC','BAH','VVX','PSN','CBZ','MMS'];
+let scrAbort=false;
+function extractMetrics(m){
+  if(!m)return null;
+  const pick=(...ks)=>{ for(const k of ks){ const v=Number(m[k]); if(!isNaN(v)&&isFinite(v)) return v; } return null; };
+  return {
+    pe:pick('peTTM','peBasicExclExtraTTM','peNormalizedAnnual'),
+    g:pick('epsGrowth5Y','epsGrowth3Y','epsGrowthTTMYoy'),
+    dy:pick('currentDividendYieldTTM','dividendYieldIndicatedAnnual')||0,
+    dte:pick('totalDebt/totalEquityQuarterly','totalDebt/totalEquityAnnual'),
+    mc:pick('marketCapitalization')
+  };
+}
+async function getMetricsCached(t,key){
+  try{ const raw=localStorage.getItem('mx_'+t);
+    if(raw){ const o=JSON.parse(raw); if(Date.now()-o.ts<24*3600e3) return {x:o.x,cached:true}; } }catch(e){}
+  const r=await fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(t)}&metric=all&token=${encodeURIComponent(key)}`);
+  if(r.status===429) throw new Error('rate-limit');
+  const j=await r.json();
+  const x=extractMetrics(j&&j.metric);
+  try{ localStorage.setItem('mx_'+t,JSON.stringify({ts:Date.now(),x})); }catch(e){}
+  return {x,cached:false};
+}
+async function getNameCached(t,key){
+  try{ const raw=localStorage.getItem('pn_'+t); if(raw)return raw; }catch(e){}
+  try{
+    const r=await fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(t)}&token=${encodeURIComponent(key)}`);
+    if(r.ok){ const j=await r.json(); const n=(j&&j.name)?j.name:''; try{ localStorage.setItem('pn_'+t,n); }catch(e){} return n; }
+  }catch(e){}
+  return '';
+}
+function judgeLynch(x,c){
+  // returns {pass, peg, fails:[reasons]}
+  if(!x) return {pass:false,fails:['no data']};
+  const fails=[];
+  if(x.pe===null||x.pe<=0){ return {pass:false,fails:['no positive earnings']}; }
+  if(x.g===null){ return {pass:false,fails:['no growth data']}; }
+  const peg=x.pe/(x.g+x.dy);
+  if(!(peg>0&&peg<c.peg_max)) fails.push('PEG '+(peg>0?peg.toFixed(2):'n/a')+' ≥ '+c.peg_max);
+  if(x.g<c.g_min) fails.push('growth '+x.g.toFixed(0)+'% < '+c.g_min+'%');
+  if(x.g>c.g_max) fails.push('growth '+x.g.toFixed(0)+'% > '+c.g_max+'% (hypergrowth)');
+  if(x.dte===null) fails.push('no debt data');
+  else if(x.dte>=c.dte_max) fails.push('D/E '+x.dte.toFixed(2)+' ≥ '+c.dte_max);
+  return {pass:fails.length===0, peg, fails};
+}
+function scrRow(t,name,x,peg){
+  return `<tr><td><b>${t}</b><div style="font-size:10px;color:var(--faint);font-weight:400">${(name||'').slice(0,26)}</div></td>
+   <td class="good">${peg.toFixed(2)}</td><td>${x.pe.toFixed(1)}×</td>
+   <td>${x.g.toFixed(0)}%</td><td>${x.dte!==null?x.dte.toFixed(2):'—'}</td><td>${x.dy.toFixed(1)}%</td>
+   <td>${x.mc?('$'+(x.mc>=1000?(x.mc/1000).toFixed(1)+'B':x.mc.toFixed(0)+'M')):'—'}</td>
+   <td><button class="scr-add" data-scradd="${t}">+ watch</button></td></tr>`;
+}
+function missRow(t,x,j){
+  return `<tr><td><b>${t}</b></td><td colspan="6" style="color:var(--warn)">${j.fails[0]}</td>
+   <td><button class="scr-add" data-scradd="${t}">+ watch</button></td></tr>`;
+}
+function scrTableShell(id,title){
+  return `<div class="loadin" style="padding:8px 2px 0">${title}</div>
+  <table class="scr-table"><thead><tr><th>Ticker</th><th>PEG</th><th>P/E</th><th>EPS gr</th><th>D/E</th><th>Div</th><th>Mkt cap</th><th></th></tr></thead><tbody id="${id}"></tbody></table>`;
+}
+function wireScrAdd(){
+  document.querySelectorAll('[data-scradd]').forEach(b=>{
+    if(b.dataset.wired)return; b.dataset.wired='1';
+    b.addEventListener('click',e=>{
+      document.getElementById('addSym').value=e.target.dataset.scradd;
+      document.getElementById('addTier').value='2';
+      addTicker();
+      e.target.textContent='✓'; e.target.disabled=true;
+    });
+  });
+}
+function renderScreen(qual,misses,doneTxt){
+  const res=document.getElementById('scrResults');
+  qual.sort((a,b)=>a.peg-b.peg);
+  let html='';
+  if(qual.length){ html+=scrTableShell('scrBody','Qualifiers — sorted by PEG (best first)'); }
+  if(misses.length){ html+=scrTableShell('scrMiss','Near misses — failed exactly one test'); }
+  if(!qual.length&&!misses.length&&doneTxt) html='<div class="loadin" style="padding:10px 2px">No qualifiers or near-misses this pass — the screen is strict by design. Loosen the thresholds above and re-run (cached names re-screen instantly).</div>';
+  res.innerHTML=html+(doneTxt?'':'<div class="scr-bar"><i id="scrBarFill"></i></div>');
+  if(qual.length){ const b=document.getElementById('scrBody'); qual.forEach(q=>b.insertAdjacentHTML('beforeend',scrRow(q.t,q.name,q.x,q.peg))); }
+  if(misses.length){ const b=document.getElementById('scrMiss'); misses.slice(0,12).forEach(q=>b.insertAdjacentHTML('beforeend',missRow(q.t,q.x,q.j))); }
+  wireScrAdd();
+}
+async function runLynchScreen(){
+  const key=getKey();
+  const st=document.getElementById('scrStatus');
+  if(!key){ st.textContent='Screener needs the Finnhub key (Live prices bar)'; st.className='status err'; return; }
+  const c=lynchCrit();
+  scrAbort=false;
+  document.getElementById('runScreen').style.display='none';
+  document.getElementById('stopScreen').style.display='';
+  const pool=[...new Set(UNIVERSE)].filter(t=>/^[A-Z.\-]+$/.test(t));
+  for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+  let qual=[], misses=[], tried=0, apiCalls=0;
+  renderScreen(qual,misses,null);
+  for(const t of pool){
+    if(scrAbort||qual.length>=20)break;
+    tried++;
+    st.className='status';
+    st.textContent='Screening '+t+' … '+qual.length+' qualified · '+misses.length+' near · '+tried+'/'+pool.length;
+    const bar=document.getElementById('scrBarFill'); if(bar)bar.style.width=(tried/pool.length*100)+'%';
+    try{
+      const {x,cached}=await getMetricsCached(t,key);
+      const j=judgeLynch(x,c);
+      if(j.pass){ const name=await getNameCached(t,key); qual.push({t,name,x,peg:j.peg}); renderScreen(qual,misses,null); }
+      else if(j.fails.length===1&&x&&x.pe>0){ misses.push({t,x,j}); if(misses.length<=12)renderScreen(qual,misses,null); }
+      if(!cached){ apiCalls++; await new Promise(r=>setTimeout(r,1100)); }
+    }catch(e){
+      if(e.message==='rate-limit'){ st.textContent='Rate limit — pausing 30s…'; await new Promise(r=>setTimeout(r,30000)); }
+    }
+  }
+  document.getElementById('runScreen').style.display='';
+  document.getElementById('stopScreen').style.display='none';
+  const doneTxt=(scrAbort?'Stopped':'Done')+' — '+qual.length+' qualified, '+misses.length+' near-misses, '+tried+' checked ('+apiCalls+' fresh, rest cached) · '+new Date().toLocaleTimeString();
+  st.className='status '+(qual.length?'ok':'');
+  st.textContent=doneTxt;
+  renderScreen(qual,misses,doneTxt);
+  try{ localStorage.setItem('lynch_screen',JSON.stringify({ts:Date.now(),qual,misses:misses.slice(0,12)})); }catch(e){}
+}
+function showCachedScreen(){
+  restoreCrit();
+  try{
+    const raw=localStorage.getItem('lynch_screen'); if(!raw)return;
+    const o=JSON.parse(raw); if(!o.qual&&!o.misses)return;
+    renderScreen(o.qual||[],o.misses||[],'Last screen · '+new Date(o.ts).toLocaleString());
+    document.getElementById('scrStatus').textContent='Showing last screen ('+new Date(o.ts).toLocaleString()+') — run again for fresh';
+  }catch(e){}
+}
 function updateLynch(t){  const d=allData().find(x=>x.t===t); const row=document.querySelector(`.lynch[data-lynch="${t}"]`); if(!d||!row)return;
   const L=lynch(d);
   const lv=row.querySelector('.lv'), lp=row.querySelector('.lprem');
@@ -912,6 +1261,11 @@ document.getElementById('saveAvKey').addEventListener('click',()=>{
   setAvStatus(avInput.value.trim()?'History key saved — open ▾ Value on any card':'Key cleared — Value charts show projections', avInput.value.trim()?'ok':'');
 });
 avInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ setAvKey(avInput.value.trim()); setAvStatus('History key saved — open ▾ Value on any card','ok'); }});
+
+// screener controls
+document.getElementById('runScreen').addEventListener('click',runLynchScreen);
+document.getElementById('stopScreen').addEventListener('click',()=>{scrAbort=true;});
+showCachedScreen();
 
 load();
 if(getKey()) refreshAll();   // auto-pull live prices on open when a key exists
