@@ -310,6 +310,13 @@
     <span class="status" id="gStatus">Optional &amp; free — get a key at aistudio.google.com/apikey. With it, each card's Story is written by AI from its live data; without it, template drafts are used.</span>
   </div>
 
+  <div class="live-bar">
+    <span class="live-eyebrow">History key 2</span>
+    <input class="keyin" id="tdkey" type="password" placeholder="Paste free Twelve Data key (more charts/day than Alpha Vantage)…" autocomplete="off">
+    <button class="btn go" id="saveTdKey">Save key</button>
+    <span class="status" id="tdStatus">Optional — free key at twelvedata.com (~800 calls/day). Used first for the 15-yr chart; Alpha Vantage is the fallback.</span>
+  </div>
+
   <div id="tiers"></div>
 
   <footer>
@@ -920,7 +927,7 @@ function wire(){
       e.target.textContent = open?'▴ Value':'▾ Value';
       if(!open)return;
       box.style.minHeight='0';
-      if(getAvKey()||avCacheGet(t)){
+      if(getTdKey()||getAvKey()||avCacheGet(t)){
         box.innerHTML='<div class="loadin">Loading 15-yr price vs earnings…</div>';
         try{
           const hist=await fetchHistory(t);
@@ -934,7 +941,7 @@ function wire(){
           return;
         }
       }
-      box.innerHTML='<div class="loadin">Projection (add a free Alpha Vantage history key above for the true 15-yr chart)</div>'+lynchSVG(t);
+      box.innerHTML='<div class="loadin">Projection (add a free Twelve Data or Alpha Vantage history key above for the true 15-yr chart)</div>'+lynchSVG(t);
     });
   });
   document.querySelectorAll('.chart-btn[data-chart]').forEach(btn=>{
@@ -1070,8 +1077,43 @@ function avCacheGet(sym){
   }catch(e){ return null; }
 }
 function avCacheSet(sym,o){ avMem[sym]=o; try{ localStorage.setItem('avh_'+sym,JSON.stringify(o)); }catch(e){} }
+// ---- Twelve Data (primary history source, ~800 calls/day free) ----
+const TDKEY='watchlist_tdkey';
+let memTd=null;
+function getTdKey(){ try{ return localStorage.getItem(TDKEY)||''; }catch(e){ return memTd||''; } }
+function setTdKey(v){ try{ localStorage.setItem(TDKEY,v); }catch(e){ memTd=v; } }
+function setTdStatus(msg,cls){ const el=document.getElementById('tdStatus'); if(el){ el.textContent=msg; el.className='status'+(cls?' '+cls:''); } }
+async function fetchHistoryTD(sym){
+  const key=getTdKey(); if(!key)throw new Error('no-td-key');
+  const cutoff=Date.now()-15*365.25*24*3600e3;
+  const [ts,ea]=await Promise.all([
+    fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=1month&outputsize=180&apikey=${encodeURIComponent(key)}`).then(r=>r.json()),
+    fetch(`https://api.twelvedata.com/earnings?symbol=${encodeURIComponent(sym)}&apikey=${encodeURIComponent(key)}`).then(r=>r.json())
+  ]);
+  if(ts.status==='error'||ts.code===429) throw new Error(ts.code===429?'rate-limit':'no-data');
+  const vals=ts.values; if(!Array.isArray(vals)||!vals.length) throw new Error('no-data');
+  const prices=vals.map(v=>[new Date(v.datetime).getTime(), Number(v.close)])
+    .filter(([t,v])=>t>=cutoff && v>0).sort((a,b)=>a[0]-b[0]);
+  // Twelve Data earnings = quarterly EPS; sum trailing 4 per date to approximate annual EPS
+  let eps=[];
+  const er=(ea&&ea.earnings)||[];
+  if(Array.isArray(er)&&er.length){
+    const q=er.map(x=>[new Date(x.date).getTime(), Number(x.eps_actual)])
+      .filter(([t,v])=>!isNaN(v)).sort((a,b)=>a[0]-b[0]);
+    for(let i=3;i<q.length;i++){ eps.push([q[i][0], q[i][1]+q[i-1][1]+q[i-2][1]+q[i-3][1]]); }
+    eps=eps.filter(([t,v])=>t>=cutoff);
+  }
+  if(!prices.length) throw new Error('no-data');
+  return {ts:Date.now(),prices,eps,src:'td'};
+}
 async function fetchHistory(sym){
   const cached=avCacheGet(sym); if(cached)return cached;
+  // Primary: Twelve Data (if key saved)
+  if(getTdKey()){
+    try{ const o=await fetchHistoryTD(sym); avCacheSet(sym,o); return o; }
+    catch(e){ if(e.message!=='no-td-key' && e.message!=='rate-limit' && e.message!=='no-data') {/* fall through */} }
+  }
+  // Fallback: Alpha Vantage
   const key=getAvKey(); if(!key)throw new Error('no-key');
   const [pr,er]=await Promise.all([
     fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_MONTHLY_ADJUSTED&symbol=${encodeURIComponent(sym)}&apikey=${encodeURIComponent(key)}`).then(r=>r.json()),
@@ -1090,7 +1132,7 @@ async function fetchHistory(sym){
     .filter(([t,v])=>t>=cutoff && !isNaN(v))
     .sort((a,b)=>a[0]-b[0]);
   if(!prices.length) throw new Error('no-data');
-  const o={ts:Date.now(),prices,eps};
+  const o={ts:Date.now(),prices,eps,src:'av'};
   avCacheSet(sym,o); return o;
 }
 function histLynchSVG(sym,hist){
@@ -1173,7 +1215,7 @@ async function openFull(t){
   wrap.appendChild(s); tv.appendChild(wrap);
   // large Lynch chart: historical if possible
   const lbox=bg.querySelector('#fullLynch');
-  if(getAvKey()||avCacheGet(t)){
+  if(getTdKey()||getAvKey()||avCacheGet(t)){
     try{ const hist=await fetchHistory(t); lbox.innerHTML=histLynchSVG(t,hist); }
     catch(err){ lbox.innerHTML='<div class="loadin">'+(err.message==='rate-limit'?'AV daily limit — projection shown':'History unavailable — projection shown')+'</div>'+lynchSVG(t); }
   } else lbox.innerHTML='<div class="loadin">Projection (add a history key for the 15-yr chart)</div>'+lynchSVG(t);
@@ -1525,6 +1567,15 @@ document.getElementById('saveAvKey').addEventListener('click',()=>{
   setAvStatus(avInput.value.trim()?'History key saved — open ▾ Value on any card':'Key cleared — Value charts show projections', avInput.value.trim()?'ok':'');
 });
 avInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ setAvKey(avInput.value.trim()); setAvStatus('History key saved — open ▾ Value on any card','ok'); }});
+
+// Twelve Data (primary history) key controls
+const tdInput=document.getElementById('tdkey');
+tdInput.value=getTdKey();
+document.getElementById('saveTdKey').addEventListener('click',()=>{
+  setTdKey(tdInput.value.trim());
+  setTdStatus(tdInput.value.trim()?'Twelve Data key saved — it will be used first for 15-yr charts (~800/day)':'Key cleared — falling back to Alpha Vantage', tdInput.value.trim()?'ok':'');
+});
+tdInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ setTdKey(tdInput.value.trim()); setTdStatus('Twelve Data key saved — used first for 15-yr charts','ok'); }});
 
 // AI story key controls
 const gInput=document.getElementById('gkey');
