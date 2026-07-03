@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watchlist — Conviction Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0d1320; --bg2:#0a0f1a; --surface:#161f30; --surface2:#1d2a3f;
+    --line:#26344b; --line2:#324563;
+    --ink:#e7ecf5; --muted:#8b9ab4; --faint:#5f6f8c;
+    --pos:#40b98a; --neg:#e56b5f; --warn:#e0aa4e;
+    --t1:#40b98a; --t2:#5b8def; --t3:#e0aa4e; --t4:#b06cd6;
+    --accent:#c9a24b;
+    --disp:'Space Grotesk',system-ui,sans-serif;
+    --body:'Inter',system-ui,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(91,141,239,.08), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgba(64,185,138,.06), transparent 55%),
+      var(--bg);
+    color:var(--ink); font-family:var(--body); line-height:1.5;
+    padding:clamp(14px,3vw,34px);
+  }
+  .wrap{max-width:1180px;margin:0 auto}
+
+  /* Header */
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:var(--accent);margin:0 0 10px}
+  h1{font-family:var(--disp);font-weight:700;font-size:clamp(26px,5vw,42px);letter-spacing:-.02em;margin:0 0 6px;line-height:1.05}
+  h1 .thin{color:var(--muted);font-weight:500}
+  .sub{color:var(--muted);max-width:60ch;font-size:14.5px;margin:0 0 4px}
+  .note{margin-top:14px;padding:11px 14px;border:1px solid var(--line);border-left:2px solid var(--accent);
+    border-radius:8px;background:linear-gradient(180deg,rgba(201,162,75,.06),transparent);
+    font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--ink);font-weight:600}
+
+  /* Summary strip */
+  .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:22px 0 8px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+  .stat .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .stat .v{font-family:var(--mono);font-size:22px;font-weight:600;margin-top:5px;letter-spacing:-.01em}
+  .stat .v small{font-size:12px;color:var(--muted);font-weight:400}
+
+  /* Controls */
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:20px 0 6px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;padding:7px 12px;border-radius:999px;
+    border:1px solid var(--line2);background:transparent;color:var(--muted);cursor:pointer;transition:.15s}
+  .chip:hover{border-color:var(--ink);color:var(--ink)}
+  .chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600}
+  .grow{flex:1 1 auto}
+  input.search,select.sort{font-family:var(--body);font-size:13px;color:var(--ink);background:var(--surface);
+    border:1px solid var(--line2);border-radius:8px;padding:8px 11px;outline:none}
+  input.search{min-width:150px}
+  input.search:focus,select.sort:focus{border-color:var(--accent)}
+  .btn{font-family:var(--mono);font-size:11.5px;padding:8px 12px;border-radius:8px;border:1px solid var(--line2);
+    background:transparent;color:var(--muted);cursor:pointer}
+  .btn:hover{color:var(--neg);border-color:var(--neg)}
+  .saved{font-family:var(--mono);font-size:11px;color:var(--faint)}
+
+  /* Tier sections */
+  .tier{margin-top:28px}
+  .tier-head{display:flex;align-items:baseline;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:16px}
+  .tier-tag{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.1em;padding:3px 9px;border-radius:6px}
+  .tier-name{font-family:var(--disp);font-weight:600;font-size:17px}
+  .tier-thesis{color:var(--muted);font-size:12.5px;margin-left:auto;text-align:right;max-width:40ch}
+  .t1 .tier-tag{background:rgba(64,185,138,.14);color:var(--t1)} .t1 .tier-name{color:var(--t1)}
+  .t2 .tier-tag{background:rgba(91,141,239,.14);color:var(--t2)} .t2 .tier-name{color:var(--t2)}
+  .t3 .tier-tag{background:rgba(224,170,78,.14);color:var(--t3)} .t3 .tier-name{color:var(--t3)}
+  .t4 .tier-tag{background:rgba(176,108,214,.14);color:var(--t4)} .t4 .tier-name{color:var(--t4)}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+
+  /* Card */
+  .card{background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-radius:14px;
+    padding:16px 16px 14px;display:flex;flex-direction:column;gap:12px;position:relative;overflow:hidden}
+  .card::before{content:"";position:absolute;top:0;left:0;bottom:0;width:3px}
+  .card.b1::before{background:var(--t1)} .card.b2::before{background:var(--t2)}
+  .card.b3::before{background:var(--t3)} .card.b4::before{background:var(--t4)}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .tkr{font-family:var(--mono);font-weight:600;font-size:19px;letter-spacing:.02em}
+  .co{font-size:12px;color:var(--muted);margin-top:1px}
+  .sec{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.08em;text-transform:uppercase;margin-top:3px}
+  .quote{font-family:var(--mono);font-size:10.5px;color:var(--muted);text-decoration:none;border:1px solid var(--line2);
+    padding:5px 8px;border-radius:7px;white-space:nowrap}
+  .quote:hover{color:var(--ink);border-color:var(--ink)}
+
+  .tags{display:flex;flex-wrap:wrap;gap:5px}
+  .tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+    border:1px solid var(--line);border-radius:5px;padding:2px 6px}
+
+  .price-row{display:flex;align-items:center;gap:10px}
+  .price-row label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+  .price-in{font-family:var(--mono);font-weight:600;font-size:17px;color:var(--ink);background:var(--surface2);
+    border:1px solid var(--line2);border-radius:8px;padding:6px 9px;width:108px;outline:none}
+  .price-in:focus{border-color:var(--accent)}
+  .asof{font-family:var(--mono);font-size:10px;color:var(--faint)}
+
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .m{background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+  .m .mk{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .m .mv{font-family:var(--mono);font-size:15px;font-weight:600;margin-top:3px}
+  .mv.pos{color:var(--pos)} .mv.neg{color:var(--neg)} .mv.mut{color:var(--muted)}
+
+  /* range track — the signature gauge */
+  .track-wrap{margin-top:2px}
+  .track-lbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--faint);margin-bottom:5px}
+  .track{position:relative;height:6px;border-radius:6px;background:linear-gradient(90deg,rgba(64,185,138,.35),rgba(224,170,78,.35),rgba(229,107,95,.4))}
+  .track .mark{position:absolute;top:50%;width:11px;height:11px;border-radius:50%;background:var(--ink);
+    border:2px solid var(--bg);transform:translate(-50%,-50%);box-shadow:0 0 0 1px var(--line2)}
+  .track-none{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+
+  .foot{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:11px}
+  .cat{font-size:12px;color:var(--ink)}
+  .cat .clbl,.risk .clbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);display:block;margin-bottom:2px}
+  .risk{font-size:12px;color:var(--muted)}
+  .insider{align-self:flex-start;font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;padding:3px 8px;border-radius:6px}
+  .insider.buy{background:rgba(64,185,138,.14);color:var(--pos)}
+  .insider.sell{background:rgba(229,107,95,.14);color:var(--neg)}
+  .insider.neu{background:rgba(139,154,180,.1);color:var(--muted)}
+  .notes{font-family:var(--body);font-size:12px;color:var(--ink);background:var(--surface2);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;resize:vertical;min-height:38px;outline:none;width:100%}
+  .notes:focus{border-color:var(--accent)}
+  .notes::placeholder{color:var(--faint)}
+
+  footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);color:var(--faint);font-size:11.5px;max-width:70ch}
+  .live-bar{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:14px;padding:12px 14px;
+    background:var(--surface);border:1px solid var(--line);border-radius:12px}
+  .live-eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  .keyin{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--surface2);border:1px solid var(--line2);
+    border-radius:8px;padding:8px 11px;outline:none;min-width:210px;flex:1 1 220px}
+  .keyin:focus{border-color:var(--accent)}
+  .btn.go{color:var(--ink);border-color:var(--line2)}
+  .btn.go:hover{color:var(--accent);border-color:var(--accent)}
+  .status{font-family:var(--mono);font-size:11px;color:var(--muted);flex:1 1 100%;margin-top:2px}
+  .status.err{color:var(--neg)} .status.ok{color:var(--pos)}
+  .livechip{font-family:var(--mono);font-size:10px;color:var(--pos);display:inline-flex;align-items:center;gap:4px}
+  .livechip::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--pos);box-shadow:0 0 6px var(--pos)}
+  .hide{display:none!important}
+  @media(max-width:560px){
+    .tier-thesis{display:none}
+    .grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">Conviction Monitor · Personal Watchlist</p>
+  <h1>Ten tickers, <span class="thin">sorted by conviction.</span></h1>
+  <p class="sub">Every name from your research, grouped by the risk/reward tiers we landed on. Type in the current price and each card recomputes P/E, upside to analyst target, and where the price sits in its 52-week range.</p>
+  <div class="note"><b>Live prices, once you add a free key.</b> Paste a free <a href="https://finnhub.io/register" target="_blank" rel="noopener" style="color:var(--accent)">Finnhub API key</a> below and the dashboard fetches live quotes for every ticker; without one it stays in manual mode with our research prices (see each card's "as of" date). Your key is stored only in this browser — it's never written into the code or the repo, so don't paste it into the file or commit it.</div>
+
+  <div class="strip" id="strip"></div>
+
+  <div class="controls">
+    <div class="chips" id="tierChips">
+      <button class="chip on" data-tier="all">All</button>
+      <button class="chip" data-tier="1">Tier 1</button>
+      <button class="chip" data-tier="2">Tier 2</button>
+      <button class="chip" data-tier="3">Tier 3</button>
+      <button class="chip" data-tier="4">Tier 4</button>
+    </div>
+    <span class="grow"></span>
+    <input class="search" id="search" placeholder="Filter ticker or name…" autocomplete="off">
+    <select class="sort" id="sort">
+      <option value="upside">Sort: Upside ▼</option>
+      <option value="pe">Sort: P/E ▲</option>
+      <option value="name">Sort: Ticker A–Z</option>
+    </select>
+    <button class="btn" id="reset">Reset prices</button>
+  </div>
+  <div class="saved" id="savedLine"></div>
+
+  <div class="live-bar">
+    <span class="live-eyebrow">Live prices</span>
+    <input class="keyin" id="apikey" type="password" placeholder="Paste free Finnhub API key…" autocomplete="off">
+    <button class="btn go" id="saveKey">Save key</button>
+    <button class="btn go" id="refresh">↻ Refresh live</button>
+    <span class="status" id="status">Manual mode — add a key for live quotes</span>
+  </div>
+
+  <div id="tiers"></div>
+
+  <footer>
+    Not investment advice. Figures are drawn from our research on the dates shown and will drift — verify live before acting. P/E uses an approximate trailing EPS and may differ from a broker's GAAP/non-GAAP convention; read it as directional. Clinical-stage names have no earnings, so P/E shows "—". Blank prices are names we discussed but didn't quote — add your own.
+  </footer>
+</div>
+
+<script>
+const KEY='watchlist_v1';
+
+// Reference data from our conversation. p = last-known price (default), eps = approx TTM, tgt = analyst target avg.
+const DATA=[
+ {t:'NICE',n:'NICE Ltd.',tier:1,sec:'Enterprise Software',tags:['Software','AI','Value'],p:88.13,eps:9.71,tgt:131,lo:null,hi:null,
+  cat:'Cloud/AI ARR growth · Cognigy integration · watch net-retention rate',ins:'neu',
+  risk:'AI disruption from Salesforce Agentforce — arguably over-discounted',asOf:"Q1 '26",url:'NICE'},
+ {t:'REGN',n:'Regeneron',tier:1,sec:'Biotech',tags:['Biotech','Value','Defensive'],p:623.54,eps:44.31,tgt:833,lo:507.65,hi:821.11,
+  cat:'PDUFA: linvoseltamab Jul 10 / odronextamab Jul 30 · Q2 earnings',ins:'neu',
+  risk:'Eylea biosimilar erosion (patent cliff)',asOf:"Jun 30 '26",url:'REGN'},
+ {t:'ADUS',n:'Addus HomeCare',tier:1,sec:'Home Care',tags:['HomeCare','Value','Demographic'],p:105.41,eps:6.48,tgt:139,lo:88.96,hi:136.72,
+  cat:'Q2 earnings (Aug) · Medicaid / OBBBA policy decisions',ins:'neu',
+  risk:'~97% of revenue is Medicaid — concentrated policy risk',asOf:"Jul 1 '26",url:'ADUS'},
+
+ {t:'ELMD',n:'Electromed',tier:2,sec:'Medical Device',tags:['MedDevice','Quality','78% GM'],p:37.97,eps:0.85,tgt:36,lo:17.73,hi:40.00,
+  cat:'Q4 earnings ~Aug 25 · SmartVest market penetration',ins:'sell',
+  risk:'~45x earnings at all-time highs; CFO selling',asOf:"Jun 8 '26",url:'ELMD'},
+ {t:'QLYS',n:'Qualys',tier:2,sec:'Cybersecurity',tags:['Cyber','AI','82% GM'],p:138.74,eps:5.70,tgt:122,lo:74.51,hi:154,
+  cat:'Q2 earnings (early Aug) · agentic AI Risk-Ops rollout',ins:'sell',
+  risk:'Growth slowed to 7–8%; trades above analyst targets after 65% run',asOf:"Jul 1 '26",url:'QLYS'},
+ {t:'AMD',n:'Advanced Micro Devices',tier:2,sec:'Semiconductors',tags:['Semis','AI','Momentum'],p:575,eps:3.00,tgt:615,lo:133.50,hi:584.73,
+  cat:'Q2 earnings ~Aug 4 · AI server / MI-series demand',ins:'neu',
+  risk:'~190x trailing P/E — priced for AI hypergrowth after 4x run',asOf:"Jul 1 '26",url:'AMD'},
+ {t:'VMD',n:'Viemed Healthcare',tier:2,sec:'Home Health',tags:['HomeHealth','Growth'],p:11.40,eps:0.37,tgt:null,lo:5.93,hi:11.88,
+  cat:'Q2 earnings ~Aug 5 · sleep / maternal / staffing expansion',ins:'sell',
+  risk:'~31x P/E near highs; Q1 EPS miss; insider selling',asOf:"Jun 27 '26",url:'VMD'},
+ {t:'BKTI',n:'BK Technologies',tier:2,sec:'Public-Safety Comms',tags:['PubSafety','SmallCap','No debt'],p:86.04,eps:3.55,tgt:97,lo:36.17,hi:104.55,
+  cat:'BKR9500 FCC approval 2H26, shipments 1H27 · Q2 earnings ~Aug 13',ins:'neu',
+  risk:'Tiny ~3.7M-share float; the real catalyst is a 2027 event',asOf:"Jun 30 '26",url:'BKTI'},
+
+ {t:'SOFI',n:'SoFi Technologies',tier:3,sec:'Fintech',tags:['Fintech','Growth','Contested'],p:16.24,eps:0.50,tgt:21.5,lo:null,hi:null,
+  cat:'Q2 earnings ~Jul 28–29 · tech-platform segment recovery',ins:'buy',
+  risk:'Muddy Waters short thesis on earnings quality; tech platform −27%',asOf:"Jun '26",url:'SOFI'},
+
+ {t:'MPLT',n:'MapLight Therapeutics',tier:4,sec:'Biotech (clinical)',tags:['Biotech','Clinical','Binary'],p:35.17,eps:null,tgt:40,lo:12.24,hi:37.03,
+  cat:'ZEPHYR schizophrenia Ph2 topline by mid-Aug 2026',ins:'sell',
+  risk:'Binary readout; IRIS autism trial already missed its endpoint',asOf:"Jul 1 '26",url:'MPLT'},
+ {t:'VKTX',n:'Viking Therapeutics',tier:4,sec:'Biotech (clinical)',tags:['Biotech','Obesity','Clinical'],p:null,eps:null,tgt:null,lo:null,hi:null,
+  cat:'Ph1 maintenance data Q3 26 · oral VK2735 → Ph3 · VANQUISH pivotal 2027',ins:'neu',
+  risk:'The obesity data that would drive a takeout is a 2027 event',asOf:'—',url:'VKTX'},
+ {t:'TERN',n:'Terns Pharmaceuticals',tier:4,sec:'Biotech (clinical)',tags:['Biotech','Oncology','Clinical'],p:null,eps:null,tgt:null,lo:null,hi:null,
+  cat:'Additional CARDINAL Ph1 CML data during 2026',ins:'neu',
+  risk:'Binary; exact readout timing unspecified',asOf:'—',url:'TERN'},
+ {t:'ABVX',n:'Abivax',tier:4,sec:'Biotech (clinical)',tags:['Biotech','IBD','Catalyst-done'],p:null,eps:null,tgt:null,lo:null,hi:null,
+  cat:'NDA filing late Q4 26 · Crohn’s Ph2b mid-2027',ins:'neu',
+  risk:'Marquee UC catalyst already delivered; stock ran ~1,700%',asOf:'—',url:'ABVX'},
+];
+
+const TIERS={
+ 1:{tag:'TIER 1',name:'Value + catalyst',thesis:'Cheap for a nameable reason you can underwrite.'},
+ 2:{tag:'TIER 2',name:'Quality, already re-rated',thesis:'Strong businesses — but you’d buy after the run.'},
+ 3:{tag:'TIER 3',name:'Distinctive, with an overhang',thesis:'Compelling if you resolve the open question.'},
+ 4:{tag:'TIER 4',name:'Speculative / binary',thesis:'A bet on one data point — size accordingly.'},
+};
+
+let state={}; // {ticker:{price,notes}}
+let lastSaved=null;
+let memStore=null; // fallback if localStorage is unavailable
+let filterTier='all', query='', sortBy='upside';
+
+function load(){
+  let raw=null;
+  try{ raw=localStorage.getItem(KEY); }catch(e){ raw=memStore; }
+  if(raw){ try{ const parsed=JSON.parse(raw); state=parsed.state||{}; lastSaved=parsed.lastSaved||null; }catch(e){} }
+  // seed defaults for any missing
+  DATA.forEach(d=>{ if(!(d.t in state)) state[d.t]={price:d.p,notes:''}; });
+  // don't trust a "live" flag across reloads — a fresh fetch will re-set it
+  Object.values(state).forEach(s=>{ if(s) s.live=false; });
+  render();
+}
+let saveTimer=null;
+function save(){
+  lastSaved=Date.now();
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    const v=JSON.stringify({state,lastSaved});
+    try{ localStorage.setItem(KEY,v); }catch(e){ memStore=v; }
+    renderSaved();
+  },400);
+}
+function resetAll(){
+  state={}; DATA.forEach(d=>state[d.t]={price:d.p,notes:''});
+  lastSaved=Date.now();
+  const v=JSON.stringify({state,lastSaved});
+  try{ localStorage.setItem(KEY,v); }catch(e){ memStore=v; }
+  render();
+}
+
+// ---- Live prices (Finnhub, client-side, user's own free key) ----
+const AKEY='watchlist_apikey';
+let memKey=null, lastLive=null, fetching=false;
+function getKey(){ try{ return localStorage.getItem(AKEY)||''; }catch(e){ return memKey||''; } }
+function setKey(v){ try{ localStorage.setItem(AKEY,v); }catch(e){ memKey=v; } }
+function setStatus(msg,cls){ const el=document.getElementById('status'); el.textContent=msg; el.className='status'+(cls?' '+cls:''); }
+
+async function fetchQuote(symbol,key){
+  const url=`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(key)}`;
+  const r=await fetch(url);
+  if(r.status===401||r.status===403) throw new Error('bad-key');
+  if(r.status===429) throw new Error('rate-limit');
+  if(!r.ok) throw new Error('http-'+r.status);
+  const j=await r.json();
+  return (typeof j.c==='number')?j.c:0;   // current price; 0 = symbol not found
+}
+async function refreshAll(){
+  const key=getKey();
+  if(!key){ setStatus('Add a free API key to enable live quotes'); return; }
+  if(fetching) return; fetching=true;
+  setStatus('Fetching live quotes…');
+  let ok=0, fail=0, badKey=false;
+  await Promise.all(DATA.map(async d=>{
+    try{
+      const c=await fetchQuote(d.t,key);
+      if(c && c>0){ state[d.t]=state[d.t]||{}; state[d.t].price=c; state[d.t].live=true; ok++; }
+      else fail++;
+    }catch(e){ fail++; if(e.message==='bad-key') badKey=true; }
+  }));
+  fetching=false;
+  if(badKey){ setStatus('That key was rejected — check it and try again','err'); return; }
+  lastLive=Date.now(); save(); render();
+  setStatus(`Live: ${ok} updated · ${fail} unavailable · ${new Date(lastLive).toLocaleTimeString()}`, ok?'ok':'err');
+}
+
+const num=v=>(v===null||v===undefined||v===''||isNaN(v))?null:Number(v);
+function upside(price,tgt){ if(!num(price)||!num(tgt))return null; return (tgt-price)/price*100; }
+function pe(price,eps){ if(!num(price)||!num(eps)||eps<=0)return null; return price/eps; }
+function rangePct(price,lo,hi){ if(!num(price)||!num(lo)||!num(hi)||hi<=lo)return null; return Math.max(0,Math.min(100,(price-lo)/(hi-lo)*100)); }
+
+function renderSaved(){
+  const el=document.getElementById('savedLine');
+  el.textContent = lastSaved ? 'Saved '+new Date(lastSaved).toLocaleString() : 'Edits save automatically';
+}
+function renderStrip(){
+  const byTier={1:0,2:0,3:0,4:0}; let ups=[];
+  DATA.forEach(d=>{ byTier[d.tier]++; const p=state[d.t]?.price; const u=upside(p,d.tgt); if(u!==null)ups.push(u); });
+  const avg=ups.length?(ups.reduce((a,b)=>a+b,0)/ups.length):null;
+  const s=document.getElementById('strip');
+  s.innerHTML=`
+   <div class="stat"><div class="k">Names tracked</div><div class="v">${DATA.length}</div></div>
+   <div class="stat"><div class="k">Tier 1 · value</div><div class="v">${byTier[1]} <small>/ ${byTier[2]} · ${byTier[3]} · ${byTier[4]}</small></div></div>
+   <div class="stat"><div class="k">Avg upside to target</div><div class="v ${avg>=0?'':'neg'}" style="${avg>=0?'color:var(--pos)':''}">${avg===null?'—':(avg>=0?'+':'')+avg.toFixed(0)+'%'}</div></div>
+   <div class="stat"><div class="k">With price + target</div><div class="v">${ups.length}<small>/${DATA.length}</small></div></div>`;
+}
+
+function card(d){
+  const st=state[d.t]||{price:null,notes:''};
+  const p=st.price;
+  const u=upside(p,d.tgt), pev=pe(p,d.eps), rp=rangePct(p,d.lo,d.hi);
+  const insTxt={buy:'▲ Insider buying',sell:'▼ Insider selling',neu:'— Insider: neutral'}[d.ins];
+  const track = (rp===null)
+    ? `<div class="track-none">52-wk range not on file</div>`
+    : `<div class="track-lbl"><span>$${d.lo}</span><span>52-week range</span><span>$${d.hi}</span></div>
+       <div class="track"><div class="mark" style="left:${rp}%"></div></div>`;
+  return `<div class="card b${d.tier}" data-tkr="${d.t}" data-name="${d.n.toLowerCase()}">
+    <div class="top">
+      <div>
+        <div class="tkr">${d.t}</div>
+        <div class="co">${d.n}</div>
+        <div class="sec">${d.sec}</div>
+      </div>
+      <a class="quote" href="https://finance.yahoo.com/quote/${d.url}" target="_blank" rel="noopener">Live quote ↗</a>
+    </div>
+    <div class="tags">${d.tags.map(x=>`<span class="tag">${x}</span>`).join('')}</div>
+    <div class="price-row">
+      <label>Price $</label>
+      <input class="price-in" type="number" step="0.01" inputmode="decimal" value="${p??''}" data-tkr="${d.t}" placeholder="add">
+      <span class="asof">${st.live?`<span class="livechip">live ${lastLive?new Date(lastLive).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</span>`:'as of '+d.asOf}</span>
+    </div>
+    <div class="metrics">
+      <div class="m"><div class="mk">P/E (approx)</div><div class="mv ${pev===null?'mut':''}">${pev===null?'—':pev.toFixed(1)+'×'}</div></div>
+      <div class="m"><div class="mk">Analyst target</div><div class="mv ${d.tgt?'':'mut'}">${d.tgt?'$'+d.tgt:'—'}</div></div>
+      <div class="m"><div class="mk">Upside to target</div><div class="mv ${u===null?'mut':(u>=0?'pos':'neg')}">${u===null?'—':(u>=0?'+':'')+u.toFixed(0)+'%'}</div></div>
+      <div class="m"><div class="mk">Pos. in 52-wk</div><div class="mv ${rp===null?'mut':(rp>66?'neg':rp<34?'pos':'')}">${rp===null?'—':rp.toFixed(0)+'%'}</div></div>
+    </div>
+    <div class="track-wrap">${track}</div>
+    <div class="foot">
+      <div class="cat"><span class="clbl">Next catalyst</span>${d.cat}</div>
+      <div class="risk"><span class="clbl">Key risk</span>${d.risk}</div>
+      <span class="insider ${d.ins}">${insTxt}</span>
+      <textarea class="notes" data-tkr="${d.t}" placeholder="Your notes — thesis, price alerts, questions…">${st.notes||''}</textarea>
+    </div>
+  </div>`;
+}
+
+function render(){
+  renderStrip(); renderSaved();
+  const host=document.getElementById('tiers');
+  const q=query.trim().toLowerCase();
+  let html='';
+  [1,2,3,4].forEach(tier=>{
+    if(filterTier!=='all' && String(tier)!==filterTier) return;
+    let items=DATA.filter(d=>d.tier===tier)
+      .filter(d=> !q || d.t.toLowerCase().includes(q) || d.n.toLowerCase().includes(q));
+    // sort within tier
+    items.sort((a,b)=>{
+      if(sortBy==='name') return a.t.localeCompare(b.t);
+      if(sortBy==='pe'){ const pa=pe(state[a.t]?.price,a.eps), pb=pe(state[b.t]?.price,b.eps);
+        if(pa===null)return 1; if(pb===null)return -1; return pa-pb; }
+      const ua=upside(state[a.t]?.price,a.tgt), ub=upside(state[b.t]?.price,b.tgt);
+      if(ua===null)return 1; if(ub===null)return -1; return ub-ua;
+    });
+    if(!items.length) return;
+    const T=TIERS[tier];
+    html+=`<section class="tier t${tier}">
+      <div class="tier-head">
+        <span class="tier-tag">${T.tag}</span>
+        <span class="tier-name">${T.name}</span>
+        <span class="tier-thesis">${T.thesis}</span>
+      </div>
+      <div class="grid">${items.map(card).join('')}</div>
+    </section>`;
+  });
+  host.innerHTML = html || `<p style="color:var(--muted);font-family:var(--mono);font-size:13px;margin-top:24px">No names match that filter.</p>`;
+  wire();
+}
+
+function wire(){
+  document.querySelectorAll('.price-in').forEach(inp=>{
+    inp.addEventListener('input',e=>{
+      const t=e.target.dataset.tkr; const v=e.target.value;
+      state[t]=state[t]||{}; state[t].price = v===''?null:Number(v);
+      // live-update just this card + strip without full rerender (keep focus)
+      updateCard(t); renderStrip(); save();
+    });
+  });
+  document.querySelectorAll('.notes').forEach(ta=>{
+    ta.addEventListener('input',e=>{
+      const t=e.target.dataset.tkr; state[t]=state[t]||{}; state[t].notes=e.target.value; save();
+    });
+  });
+}
+function updateCard(t){
+  const d=DATA.find(x=>x.t===t); const el=document.querySelector(`.card[data-tkr="${t}"]`); if(!el)return;
+  const p=state[t]?.price;
+  const u=upside(p,d.tgt), pev=pe(p,d.eps), rp=rangePct(p,d.lo,d.hi);
+  const ms=el.querySelectorAll('.m .mv');
+  ms[0].textContent = pev===null?'—':pev.toFixed(1)+'×'; ms[0].className='mv '+(pev===null?'mut':'');
+  ms[2].textContent = u===null?'—':(u>=0?'+':'')+u.toFixed(0)+'%'; ms[2].className='mv '+(u===null?'mut':(u>=0?'pos':'neg'));
+  ms[3].textContent = rp===null?'—':rp.toFixed(0)+'%'; ms[3].className='mv '+(rp===null?'mut':(rp>66?'neg':rp<34?'pos':''));
+  const mark=el.querySelector('.track .mark'); if(mark&&rp!==null) mark.style.left=rp+'%';
+}
+
+// controls
+document.getElementById('tierChips').addEventListener('click',e=>{
+  const b=e.target.closest('.chip'); if(!b)return;
+  document.querySelectorAll('#tierChips .chip').forEach(c=>c.classList.remove('on'));
+  b.classList.add('on'); filterTier=b.dataset.tier; render();
+});
+document.getElementById('search').addEventListener('input',e=>{query=e.target.value;render();});
+document.getElementById('sort').addEventListener('change',e=>{sortBy=e.target.value;render();});
+document.getElementById('reset').addEventListener('click',()=>{
+  if(confirm('Reset all prices to their research defaults? Your notes will be cleared too.')) resetAll();
+});
+
+// live-price controls
+const keyInput=document.getElementById('apikey');
+keyInput.value=getKey();
+document.getElementById('saveKey').addEventListener('click',()=>{
+  setKey(keyInput.value.trim());
+  if(keyInput.value.trim()){ setStatus('Key saved — fetching…'); refreshAll(); }
+  else setStatus('Key cleared — manual mode');
+});
+document.getElementById('refresh').addEventListener('click',refreshAll);
+keyInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ setKey(keyInput.value.trim()); refreshAll(); }});
+
+load();
+if(getKey()) refreshAll();   // auto-pull live prices on open when a key exists
+</script>
+</body>
+</html>
