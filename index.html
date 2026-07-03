@@ -1070,23 +1070,40 @@ let scrAbort=false;
 async function loadUniverseUS(key,statusFn){
   try{ const raw=localStorage.getItem('uni_us');
     if(raw){ const o=JSON.parse(raw); if(Date.now()-o.ts<7*24*3600e3 && o.list&&o.list.length) return o.list; } }catch(e){}
-  for(let attempt=1;attempt<=3;attempt++){
-    const r=await fetch(`https://finnhub.io/api/v1/stock/symbol?exchange=US&token=${encodeURIComponent(key)}`);
-    if(r.status===429){
-      if(statusFn)statusFn('Rate limit on universe download — waiting 35s (attempt '+attempt+'/3)…');
-      await new Promise(x=>setTimeout(x,35000)); continue;
+  const ok=/^[A-Z]{1,5}$/;
+  // Plan A: Finnhub, split by exchange (smaller responses survive where the full dump dies)
+  let syms=new Set();
+  for(const mic of ['XNAS','XNYS','XASE']){
+    let got=false;
+    for(let attempt=1;attempt<=2&&!got;attempt++){
+      try{
+        if(statusFn)statusFn('Downloading universe — '+mic+' (attempt '+attempt+')…');
+        const r=await fetch(`https://finnhub.io/api/v1/stock/symbol?exchange=US&mic=${mic}&token=${encodeURIComponent(key)}`);
+        if(r.status===429){ if(statusFn)statusFn('Rate limit — waiting 35s…'); await new Promise(x=>setTimeout(x,35000)); continue; }
+        if(!r.ok) break;
+        const j=await r.json();
+        (Array.isArray(j)?j:[]).forEach(x=>{
+          if((x.type==='Common Stock'||!x.type)&&ok.test(x.symbol||'')) syms.add(x.symbol);
+        });
+        got=true;
+      }catch(e){ break; } // network abort on this chunk → move on / fall through
     }
-    if(r.status===401||r.status===403) throw new Error('universe-auth');
-    if(!r.ok) throw new Error('universe-http-'+r.status);
-    const j=await r.json();
-    if(!Array.isArray(j)||!j.length) throw new Error('universe-empty');
-    let list=j.filter(x=>x.type==='Common Stock' && /^[A-Z]{1,5}$/.test(x.symbol||'')).map(x=>x.symbol);
-    if(!list.length) list=j.filter(x=>/^[A-Z]{1,5}$/.test(x.symbol||'')).map(x=>x.symbol); // fallback: any type
-    list.sort();
-    try{ localStorage.setItem('uni_us',JSON.stringify({ts:Date.now(),list})); }catch(e){}
-    return list;
   }
-  throw new Error('universe-ratelimit');
+  // Plan B: SEC's official ticker file (no key, ~1MB, CORS-open)
+  if(syms.size<500){
+    try{
+      if(statusFn)statusFn('Finnhub chunks failed — using SEC ticker list…');
+      const r=await fetch('https://www.sec.gov/files/company_tickers.json');
+      if(r.ok){
+        const j=await r.json();
+        Object.values(j).forEach(x=>{ const s=(x.ticker||'').toUpperCase(); if(ok.test(s)) syms.add(s); });
+      }
+    }catch(e){}
+  }
+  if(syms.size<500) throw new Error('universe-unavailable');
+  const list=[...syms].sort();
+  try{ localStorage.setItem('uni_us',JSON.stringify({ts:Date.now(),list})); }catch(e){}
+  return list;
 }
 function deepState(){
   try{ return JSON.parse(localStorage.getItem('deep_state')||'null')||{idx:0,qual:[],misses:[],done:false}; }
@@ -1191,10 +1208,8 @@ async function runLynchScreen(){
     try{ pool=await loadUniverseUS(key,msg=>{st.className='status';st.textContent=msg;}); }
     catch(e){
       st.className='status err';
-      st.textContent = e.message==='universe-auth' ? 'Universe download rejected — check the Finnhub key'
-        : e.message==='universe-ratelimit' ? 'Still rate-limited after retries — wait a minute, then run again'
-        : e.message==='universe-empty' ? 'Finnhub returned an empty symbol list — try again shortly'
-        : 'Universe download failed ('+e.message+') — check connection and retry';
+      st.textContent = e.message==='universe-unavailable' ? 'Both universe sources failed — check your connection (or a blocker) and retry'
+        : 'Universe download failed ('+e.message+') — retry in a minute';
       document.getElementById('runScreen').style.display=''; document.getElementById('stopScreen').style.display='none'; return; }
     ds=deepState();
     if(ds.done||ds.idx>=pool.length){ ds={idx:0,qual:ds.qual||[],misses:ds.misses||[],done:false}; } // new full pass keeps old finds
