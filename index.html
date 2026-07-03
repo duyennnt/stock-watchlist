@@ -218,8 +218,12 @@
   <div class="strip" id="strip"></div>
 
   <div class="live-bar" style="border-left:2px solid var(--pos);row-gap:8px">
-    <span class="live-eyebrow" style="color:var(--pos)">Lynch screener</span>
-    <button class="btn go" id="runScreen" style="color:var(--pos);border-color:rgba(64,185,138,.5)">▶ Find fast growers</button>
+    <span class="live-eyebrow" style="color:var(--pos)">Screener</span>
+    <select class="sort" id="scrMode" style="font-family:var(--mono);font-size:11.5px">
+      <option value="lynch">Lynch: fast growers</option>
+      <option value="magic">Greenblatt: Magic Formula</option>
+    </select>
+    <button class="btn go" id="runScreen" style="color:var(--pos);border-color:rgba(64,185,138,.5)">▶ Run</button>
     <button class="btn" id="stopScreen" style="display:none">■ Stop</button>
     <span style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">PEG ≤</span>
     <input class="gr-in" id="cPeg" type="number" step="0.1" min="0.1" style="width:52px" value="1.0">
@@ -1118,17 +1122,18 @@ function extractMetrics(m){
     g:pick('epsGrowth5Y','epsGrowth3Y','epsGrowthTTMYoy'),
     dy:pick('currentDividendYieldTTM','dividendYieldIndicatedAnnual')||0,
     dte:pick('totalDebt/totalEquityQuarterly','totalDebt/totalEquityAnnual'),
-    mc:pick('marketCapitalization')
+    mc:pick('marketCapitalization'),
+    roc:pick('roiTTM','roiAnnual','roeTTM','roeRfy')   // return-on-capital proxy for Magic Formula
   };
 }
 async function getMetricsCached(t,key){
-  try{ const raw=localStorage.getItem('mx_'+t);
+  try{ const raw=localStorage.getItem('mx2_'+t);
     if(raw){ const o=JSON.parse(raw); if(Date.now()-o.ts<24*3600e3) return {x:o.x,cached:true}; } }catch(e){}
   const r=await fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(t)}&metric=all&token=${encodeURIComponent(key)}`);
   if(r.status===429) throw new Error('rate-limit');
   const j=await r.json();
   const x=extractMetrics(j&&j.metric);
-  try{ localStorage.setItem('mx_'+t,JSON.stringify({ts:Date.now(),x})); }catch(e){}
+  try{ localStorage.setItem('mx2_'+t,JSON.stringify({ts:Date.now(),x})); }catch(e){}
   return {x,cached:false};
 }
 async function getNameCached(t,key){
@@ -1191,18 +1196,38 @@ function renderScreen(qual,misses,doneTxt){
   if(misses.length){ const b=document.getElementById('scrMiss'); misses.slice(0,12).forEach(q=>b.insertAdjacentHTML('beforeend',missRow(q.t,q.x,q.j))); }
   wireScrAdd();
 }
+function magicRow(rank,t,name,x){
+  return `<tr><td>#${rank}</td><td><b>${t}</b><div style="font-size:10px;color:var(--faint);font-weight:400">${(name||'').slice(0,24)}</div></td>
+   <td class="good">${(100/x.pe).toFixed(1)}%</td><td class="good">${x.roc.toFixed(1)}%</td><td>${x.pe.toFixed(1)}×</td>
+   <td>${x.mc?('$'+(x.mc>=1000?(x.mc/1000).toFixed(1)+'B':x.mc.toFixed(0)+'M')):'—'}</td>
+   <td><button class="scr-add" data-scradd="${t}">+ watch</button></td></tr>`;
+}
+async function renderMagic(cands,key,doneTxt){
+  const res=document.getElementById('scrResults');
+  // Greenblatt: rank by earnings yield + rank by return on capital; lowest combined rank wins
+  const byEy=[...cands].sort((a,b)=>(100/a.x.pe)<(100/b.x.pe)?1:-1);
+  const byRoc=[...cands].sort((a,b)=>a.x.roc<b.x.roc?1:-1);
+  const rk={}; byEy.forEach((c,i)=>rk[c.t]=(rk[c.t]||0)+i); byRoc.forEach((c,i)=>rk[c.t]=(rk[c.t]||0)+i);
+  const top=[...cands].sort((a,b)=>rk[a.t]-rk[b.t]).slice(0,20);
+  for(const c of top){ if(!c.name) c.name=await getNameCached(c.t,key); }
+  res.innerHTML='<div class="loadin" style="padding:8px 2px 0">Magic Formula — top 20 by combined rank (earnings yield + return on capital) · '+cands.length+' ranked'+(doneTxt?' · '+doneTxt:'')+'</div>'
+   +'<table class="scr-table"><thead><tr><th>Rank</th><th>Ticker</th><th>Earn. yield</th><th>Ret. on cap</th><th>P/E</th><th>Mkt cap</th><th></th></tr></thead><tbody>'
+   +top.map((c,i)=>magicRow(i+1,c.t,c.name,c.x)).join('')+'</tbody></table>';
+  wireScrAdd();
+}
 async function runLynchScreen(){
   const key=getKey();
   const st=document.getElementById('scrStatus');
   if(!key){ st.textContent='Screener needs the Finnhub key (Live prices bar)'; st.className='status err'; return; }
+  const mode=document.getElementById('scrMode').value;
   const c=lynchCrit();
   const deep=document.getElementById('deepScan').checked;
-  const capMin=(Number(document.getElementById('cCapMin').value)||0)*1000;   // $B → $M
+  const capMin=(Number(document.getElementById('cCapMin').value)||0)*1000;
   const capMax=(Number(document.getElementById('cCapMax').value)||1e6)*1000;
   scrAbort=false;
   document.getElementById('runScreen').style.display='none';
   document.getElementById('stopScreen').style.display='';
-  let pool, ds=null, qual=[], misses=[];
+  let pool, ds=null, qual=[], misses=[], cands=[];
   if(deep){
     st.className='status'; st.textContent='Loading full US symbol list…';
     try{ pool=await loadUniverseUS(key,msg=>{st.className='status';st.textContent=msg;}); }
@@ -1211,46 +1236,50 @@ async function runLynchScreen(){
       st.textContent = e.message==='universe-unavailable' ? 'Both universe sources failed — check your connection (or a blocker) and retry'
         : 'Universe download failed ('+e.message+') — retry in a minute';
       document.getElementById('runScreen').style.display=''; document.getElementById('stopScreen').style.display='none'; return; }
-    ds=deepState();
-    if(ds.done||ds.idx>=pool.length){ ds={idx:0,qual:ds.qual||[],misses:ds.misses||[],done:false}; } // new full pass keeps old finds
-    qual=ds.qual||[]; misses=ds.misses||[];
+    try{ ds=JSON.parse(localStorage.getItem('deep_'+mode)||'null')||{idx:0,qual:[],misses:[],cands:[],done:false}; }catch(e){ ds={idx:0,qual:[],misses:[],cands:[],done:false}; }
+    if(ds.done||ds.idx>=pool.length) ds.idx=0, ds.done=false;
+    qual=ds.qual||[]; misses=ds.misses||[]; cands=ds.cands||[];
   } else {
     pool=[...new Set(UNIVERSE)].filter(t=>/^[A-Z.\-]+$/.test(t));
     for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
   }
   const maxHits=deep?200:20;
   let tried=0, apiCalls=0, startIdx=deep?ds.idx:0;
-  renderScreen(qual,misses,null);
+  if(mode==='lynch') renderScreen(qual,misses,null);
   for(let i=startIdx;i<pool.length;i++){
     const t=pool[i];
-    if(scrAbort||qual.length>=maxHits)break;
+    if(scrAbort)break;
+    if(mode==='lynch'&&qual.length>=maxHits)break;
     tried++;
     st.className='status';
-    st.textContent=(deep?'Deep scan ':'Screening ')+t+' … '+qual.length+' qualified · '+misses.length+' near · position '+(i+1)+'/'+pool.length+(deep?' (resumes across visits)':'');
+    st.textContent=(deep?'Deep ':'')+(mode==='magic'?'Magic scan ':'Lynch scan ')+t+' … '+(mode==='magic'?cands.length+' ranked':qual.length+' qualified · '+misses.length+' near')+' · position '+(i+1)+'/'+pool.length+(deep?' (resumes)':'');
     const bar=document.getElementById('scrBarFill'); if(bar)bar.style.width=((i+1)/pool.length*100)+'%';
     try{
       const {x,cached}=await getMetricsCached(t,key);
-      // cap-band filter (deep mode): skip silently if outside band or unknown cap
       const inBand = !deep || (x&&x.mc!==null&&x.mc>=capMin&&x.mc<=capMax);
-      if(inBand){
-        const j=judgeLynch(x,c);
-        if(j.pass&&!qual.some(q=>q.t===t)){ const name=await getNameCached(t,key); qual.push({t,name,x,peg:j.peg}); renderScreen(qual,misses,null); }
-        else if(!j.pass&&j.fails.length===1&&x&&x.pe>0&&!misses.some(q=>q.t===t)){ misses.push({t,x,j}); if(misses.length<=12)renderScreen(qual,misses,null); }
+      if(inBand&&x){
+        if(mode==='magic'){
+          if(x.pe!==null&&x.pe>0&&x.roc!==null&&!cands.some(q=>q.t===t)) cands.push({t,x});
+        } else {
+          const j=judgeLynch(x,c);
+          if(j.pass&&!qual.some(q=>q.t===t)){ const name=await getNameCached(t,key); qual.push({t,name,x,peg:j.peg}); renderScreen(qual,misses,null); }
+          else if(!j.pass&&j.fails.length===1&&x.pe>0&&!misses.some(q=>q.t===t)){ misses.push({t,x,j}); if(misses.length<=12)renderScreen(qual,misses,null); }
+        }
       }
       if(!cached){ apiCalls++; await new Promise(r=>setTimeout(r,1100)); }
     }catch(e){
-      if(e.message==='rate-limit'){ st.textContent='Rate limit — pausing 30s… (progress is saved)'; await new Promise(r=>setTimeout(r,30000)); i--; tried--; continue; }
+      if(e.message==='rate-limit'){ st.textContent='Rate limit — pausing 30s… (progress saved)'; await new Promise(r=>setTimeout(r,30000)); i--; tried--; continue; }
     }
-    if(deep){ ds.idx=i+1; ds.qual=qual; ds.misses=misses.slice(0,50); if(ds.idx>=pool.length)ds.done=true; saveDeepState(ds); }
+    if(deep){ ds.idx=i+1; ds.qual=qual; ds.misses=misses.slice(0,50); ds.cands=cands; if(ds.idx>=pool.length)ds.done=true;
+      try{ localStorage.setItem('deep_'+mode,JSON.stringify(ds)); }catch(e){} }
   }
   document.getElementById('runScreen').style.display='';
   document.getElementById('stopScreen').style.display='none';
-  const pos=deep?(' · position '+ds.idx+'/'+pool.length+(ds.done?' — FULL PASS COMPLETE':' — resumes here next run')):'';
-  const doneTxt=(scrAbort?'Paused':'Done')+' — '+qual.length+' qualified, '+misses.length+' near-misses, '+tried+' checked this session ('+apiCalls+' fresh)'+pos+' · '+new Date().toLocaleTimeString();
-  st.className='status '+(qual.length?'ok':'');
-  st.textContent=doneTxt;
-  renderScreen(qual,misses,doneTxt);
-  try{ localStorage.setItem('lynch_screen',JSON.stringify({ts:Date.now(),qual,misses:misses.slice(0,12)})); }catch(e){}
+  const pos=deep?(' · position '+ds.idx+'/'+pool.length+(ds.done?' — FULL PASS COMPLETE':' — resumes here')):'';
+  const doneTxt=(scrAbort?'Paused':'Done')+' — '+tried+' checked this session ('+apiCalls+' fresh)'+pos+' · '+new Date().toLocaleTimeString();
+  st.className='status ok'; st.textContent=doneTxt;
+  if(mode==='magic'){ await renderMagic(cands,key,doneTxt); try{ localStorage.setItem('magic_screen',JSON.stringify({ts:Date.now(),cands})); }catch(e){} }
+  else { renderScreen(qual,misses,doneTxt); try{ localStorage.setItem('lynch_screen',JSON.stringify({ts:Date.now(),qual,misses:misses.slice(0,12)})); }catch(e){} }
 }
 function showCachedScreen(){
   restoreCrit();
