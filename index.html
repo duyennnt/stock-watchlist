@@ -143,6 +143,33 @@
   .status.err{color:var(--neg)} .status.ok{color:var(--pos)}
   .livechip{font-family:var(--mono);font-size:10px;color:var(--pos);display:inline-flex;align-items:center;gap:4px}
   .livechip::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--pos);box-shadow:0 0 6px var(--pos)}
+  .ranks{display:flex;gap:8px;align-items:center;flex-wrap:wrap}  .rank-lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  select.rank{font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--surface2);
+    border:1px solid var(--line2);border-radius:7px;padding:4px 6px;outline:none;cursor:pointer}
+  select.rank:focus{border-color:var(--accent)}
+  .lynch{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:rgba(255,255,255,.02);
+    border:1px dashed var(--line2);border-radius:9px;padding:8px 10px}
+  .lynch .lk{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .lynch .lv{font-family:var(--mono);font-size:14px;font-weight:600}
+  .lynch .lprem{font-family:var(--mono);font-size:11.5px;padding:2px 7px;border-radius:6px}
+  .lprem.below{background:rgba(64,185,138,.14);color:var(--pos)}
+  .lprem.above{background:rgba(229,107,95,.14);color:var(--neg)}
+  .lprem.none{background:rgba(139,154,180,.1);color:var(--muted)}
+  .gr-in{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--ink);background:var(--surface2);
+    border:1px solid var(--line2);border-radius:7px;padding:4px 6px;width:58px;outline:none}
+  .gr-in:focus{border-color:var(--accent)}
+  .chart-btn{font-family:var(--mono);font-size:10.5px;color:var(--muted);border:1px solid var(--line2);
+    background:transparent;border-radius:7px;padding:5px 8px;cursor:pointer;white-space:nowrap}
+  .chart-btn:hover{color:var(--ink);border-color:var(--ink)}
+  .chart-btn.open{color:var(--accent);border-color:var(--accent)}
+  .chart-box{display:none;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg2);min-height:230px}
+  .chart-box.show{display:block}
+  .chart-box .loadin{font-family:var(--mono);font-size:11px;color:var(--faint);padding:14px}
+  select.rank.r1,select.rank.gA{color:var(--pos);border-color:rgba(64,185,138,.5)}
+  select.rank.r2{color:#8fd6b4}
+  select.rank.r3,select.rank.gB{color:var(--warn)}
+  select.rank.r4{color:#e89a7a}
+  select.rank.r5,select.rank.gC{color:var(--neg);border-color:rgba(229,107,95,.5)}
   .hide{display:none!important}
   @media(max-width:560px){
     .tier-thesis{display:none}
@@ -172,6 +199,7 @@
     <select class="sort" id="sort">
       <option value="upside">Sort: Upside ▼</option>
       <option value="pe">Sort: P/E ▲</option>
+      <option value="safety">Sort: Safety ▲</option>
       <option value="name">Sort: Ticker A–Z</option>
     </select>
     <button class="btn" id="reset">Reset prices</button>
@@ -186,6 +214,19 @@
     <span class="status" id="status">Manual mode — add a key for live quotes</span>
   </div>
 
+  <div class="live-bar">
+    <span class="live-eyebrow">Add ticker</span>
+    <input class="keyin" id="addSym" placeholder="Symbol, e.g. NVDA" autocomplete="off" style="min-width:130px;flex:0 1 160px;text-transform:uppercase">
+    <select class="sort" id="addTier">
+      <option value="1">Tier 1</option>
+      <option value="2" selected>Tier 2</option>
+      <option value="3">Tier 3</option>
+      <option value="4">Tier 4</option>
+    </select>
+    <button class="btn go" id="addBtn">+ Add</button>
+    <span class="status" id="addStatus">Any US-listed symbol — name &amp; price auto-fill if a key is saved</span>
+  </div>
+
   <div id="tiers"></div>
 
   <footer>
@@ -198,33 +239,33 @@ const KEY='watchlist_v1';
 
 // Reference data from our conversation. p = last-known price (default), eps = approx TTM, tgt = analyst target avg.
 const DATA=[
- {t:'NICE',n:'NICE Ltd.',tier:1,sec:'Enterprise Software',tags:['Software','AI','Value'],p:88.13,eps:9.71,tgt:131,lo:null,hi:null,
+ {t:'NICE',n:'NICE Ltd.',tier:1,sec:'Enterprise Software',tags:['Software','AI','Value'],p:88.13,eps:9.71,gr:12,ipe:28,tgt:131,lo:null,hi:null,
   cat:'Cloud/AI ARR growth · Cognigy integration · watch net-retention rate',ins:'neu',
   risk:'AI disruption from Salesforce Agentforce — arguably over-discounted',asOf:"Q1 '26",url:'NICE'},
- {t:'REGN',n:'Regeneron',tier:1,sec:'Biotech',tags:['Biotech','Value','Defensive'],p:623.54,eps:44.31,tgt:833,lo:507.65,hi:821.11,
+ {t:'REGN',n:'Regeneron',tier:1,sec:'Biotech',tags:['Biotech','Value','Defensive'],p:623.54,eps:44.31,gr:8,ipe:16,tgt:833,lo:507.65,hi:821.11,
   cat:'PDUFA: linvoseltamab Jul 10 / odronextamab Jul 30 · Q2 earnings',ins:'neu',
   risk:'Eylea biosimilar erosion (patent cliff)',asOf:"Jun 30 '26",url:'REGN'},
- {t:'ADUS',n:'Addus HomeCare',tier:1,sec:'Home Care',tags:['HomeCare','Value','Demographic'],p:105.41,eps:6.48,tgt:139,lo:88.96,hi:136.72,
+ {t:'ADUS',n:'Addus HomeCare',tier:1,sec:'Home Care',tags:['HomeCare','Value','Demographic'],p:105.41,eps:6.48,gr:14,ipe:20,tgt:139,lo:88.96,hi:136.72,
   cat:'Q2 earnings (Aug) · Medicaid / OBBBA policy decisions',ins:'neu',
   risk:'~97% of revenue is Medicaid — concentrated policy risk',asOf:"Jul 1 '26",url:'ADUS'},
 
- {t:'ELMD',n:'Electromed',tier:2,sec:'Medical Device',tags:['MedDevice','Quality','78% GM'],p:37.97,eps:0.85,tgt:36,lo:17.73,hi:40.00,
+ {t:'ELMD',n:'Electromed',tier:2,sec:'Medical Device',tags:['MedDevice','Quality','78% GM'],p:37.97,eps:0.85,gr:18,ipe:28,tgt:36,lo:17.73,hi:40.00,
   cat:'Q4 earnings ~Aug 25 · SmartVest market penetration',ins:'sell',
   risk:'~45x earnings at all-time highs; CFO selling',asOf:"Jun 8 '26",url:'ELMD'},
- {t:'QLYS',n:'Qualys',tier:2,sec:'Cybersecurity',tags:['Cyber','AI','82% GM'],p:138.74,eps:5.70,tgt:122,lo:74.51,hi:154,
+ {t:'QLYS',n:'Qualys',tier:2,sec:'Cybersecurity',tags:['Cyber','AI','82% GM'],p:138.74,eps:5.70,gr:8,ipe:32,tgt:122,lo:74.51,hi:154,
   cat:'Q2 earnings (early Aug) · agentic AI Risk-Ops rollout',ins:'sell',
   risk:'Growth slowed to 7–8%; trades above analyst targets after 65% run',asOf:"Jul 1 '26",url:'QLYS'},
- {t:'AMD',n:'Advanced Micro Devices',tier:2,sec:'Semiconductors',tags:['Semis','AI','Momentum'],p:575,eps:3.00,tgt:615,lo:133.50,hi:584.73,
+ {t:'AMD',n:'Advanced Micro Devices',tier:2,sec:'Semiconductors',tags:['Semis','AI','Momentum'],p:575,eps:3.00,gr:35,ipe:30,tgt:615,lo:133.50,hi:584.73,
   cat:'Q2 earnings ~Aug 4 · AI server / MI-series demand',ins:'neu',
   risk:'~190x trailing P/E — priced for AI hypergrowth after 4x run',asOf:"Jul 1 '26",url:'AMD'},
- {t:'VMD',n:'Viemed Healthcare',tier:2,sec:'Home Health',tags:['HomeHealth','Growth'],p:11.40,eps:0.37,tgt:null,lo:5.93,hi:11.88,
+ {t:'VMD',n:'Viemed Healthcare',tier:2,sec:'Home Health',tags:['HomeHealth','Growth'],p:11.40,eps:0.37,gr:20,ipe:22,tgt:null,lo:5.93,hi:11.88,
   cat:'Q2 earnings ~Aug 5 · sleep / maternal / staffing expansion',ins:'sell',
   risk:'~31x P/E near highs; Q1 EPS miss; insider selling',asOf:"Jun 27 '26",url:'VMD'},
- {t:'BKTI',n:'BK Technologies',tier:2,sec:'Public-Safety Comms',tags:['PubSafety','SmallCap','No debt'],p:86.04,eps:3.55,tgt:97,lo:36.17,hi:104.55,
+ {t:'BKTI',n:'BK Technologies',tier:2,sec:'Public-Safety Comms',tags:['PubSafety','SmallCap','No debt'],p:86.04,eps:3.55,gr:15,ipe:22,tgt:97,lo:36.17,hi:104.55,
   cat:'BKR9500 FCC approval 2H26, shipments 1H27 · Q2 earnings ~Aug 13',ins:'neu',
   risk:'Tiny ~3.7M-share float; the real catalyst is a 2027 event',asOf:"Jun 30 '26",url:'BKTI'},
 
- {t:'SOFI',n:'SoFi Technologies',tier:3,sec:'Fintech',tags:['Fintech','Growth','Contested'],p:16.24,eps:0.50,tgt:21.5,lo:null,hi:null,
+ {t:'SOFI',n:'SoFi Technologies',tier:3,sec:'Fintech',tags:['Fintech','Growth','Contested'],p:16.24,eps:0.50,gr:30,ipe:14,tgt:21.5,lo:null,hi:null,
   cat:'Q2 earnings ~Jul 28–29 · tech-platform segment recovery',ins:'buy',
   risk:'Muddy Waters short thesis on earnings quality; tech platform −27%',asOf:"Jun '26",url:'SOFI'},
 
@@ -252,14 +293,27 @@ const TIERS={
 let state={}; // {ticker:{price,notes}}
 let lastSaved=null;
 let memStore=null; // fallback if localStorage is unavailable
+const CKEY='watchlist_custom';
+let customs=[]; let memCustom=null;
+function allData(){ return DATA.concat(customs); }
+function loadCustoms(){
+  let raw=null;
+  try{ raw=localStorage.getItem(CKEY); }catch(e){ raw=memCustom; }
+  if(raw){ try{ customs=JSON.parse(raw)||[]; }catch(e){ customs=[]; } }
+}
+function saveCustoms(){
+  const v=JSON.stringify(customs);
+  try{ localStorage.setItem(CKEY,v); }catch(e){ memCustom=v; }
+}
 let filterTier='all', query='', sortBy='upside';
 
 function load(){
+  loadCustoms();
   let raw=null;
   try{ raw=localStorage.getItem(KEY); }catch(e){ raw=memStore; }
   if(raw){ try{ const parsed=JSON.parse(raw); state=parsed.state||{}; lastSaved=parsed.lastSaved||null; }catch(e){} }
   // seed defaults for any missing
-  DATA.forEach(d=>{ if(!(d.t in state)) state[d.t]={price:d.p,notes:''}; });
+  allData().forEach(d=>{ if(!(d.t in state)) state[d.t]={price:d.p,notes:''}; });
   // don't trust a "live" flag across reloads — a fresh fetch will re-set it
   Object.values(state).forEach(s=>{ if(s) s.live=false; });
   render();
@@ -275,7 +329,7 @@ function save(){
   },400);
 }
 function resetAll(){
-  state={}; DATA.forEach(d=>state[d.t]={price:d.p,notes:''});
+  state={}; allData().forEach(d=>state[d.t]={price:d.p,notes:''});
   lastSaved=Date.now();
   const v=JSON.stringify({state,lastSaved});
   try{ localStorage.setItem(KEY,v); }catch(e){ memStore=v; }
@@ -304,7 +358,7 @@ async function refreshAll(){
   if(fetching) return; fetching=true;
   setStatus('Fetching live quotes…');
   let ok=0, fail=0, badKey=false;
-  await Promise.all(DATA.map(async d=>{
+  await Promise.all(allData().map(async d=>{
     try{
       const c=await fetchQuote(d.t,key);
       if(c && c>0){ state[d.t]=state[d.t]||{}; state[d.t].price=c; state[d.t].live=true; ok++; }
@@ -321,6 +375,54 @@ const num=v=>(v===null||v===undefined||v===''||isNaN(v))?null:Number(v);
 function upside(price,tgt){ if(!num(price)||!num(tgt))return null; return (tgt-price)/price*100; }
 function pe(price,eps){ if(!num(price)||!num(eps)||eps<=0)return null; return price/eps; }
 function rangePct(price,lo,hi){ if(!num(price)||!num(lo)||!num(hi)||hi<=lo)return null; return Math.max(0,Math.min(100,(price-lo)/(hi-lo)*100)); }
+function effGr(d){ const o=state[d.t]?.gr; return num(o)!==null?o:(num(d.gr)!==null?d.gr:null); }
+function effIpe(d){ const o=state[d.t]?.ipe; return num(o)!==null?o:(num(d.ipe)!==null?d.ipe:null); }
+function basisOf(d){ return state[d.t]?.basis==='ipe'?'ipe':'gr'; }
+function lynch(d){
+  const p=state[d.t]?.price, e=num(d.eps);
+  const mult = basisOf(d)==='ipe' ? effIpe(d) : effGr(d);
+  if(e===null||e<=0||mult===null||mult<=0) return null;
+  const fv=e*mult;
+  const prem=num(p)!==null?((p-fv)/fv*100):null;
+  return {fv,prem};
+}
+
+// ---- Custom tickers ----
+function setAddStatus(msg,cls){ const el=document.getElementById('addStatus'); el.textContent=msg; el.className='status'+(cls?' '+cls:''); }
+async function addTicker(){
+  const sym=document.getElementById('addSym').value.trim().toUpperCase();
+  const tier=Number(document.getElementById('addTier').value)||2;
+  if(!sym){ setAddStatus('Type a symbol first','err'); return; }
+  if(!/^[A-Z.\-]{1,10}$/.test(sym)){ setAddStatus('That doesn\'t look like a ticker symbol','err'); return; }
+  if(allData().some(d=>d.t===sym)){ setAddStatus(sym+' is already on the watchlist','err'); return; }
+  const entry={t:sym,n:sym,tier,sec:'Custom',tags:['Custom'],p:null,eps:null,tgt:null,lo:null,hi:null,
+    cat:'— add your own in notes',ins:'neu',risk:'— add your own in notes',
+    asOf:'added '+new Date().toLocaleDateString(),url:sym,custom:true};
+  const key=getKey();
+  setAddStatus('Adding '+sym+'…');
+  if(key){
+    try{
+      const c=await fetchQuote(sym,key);
+      if(!c||c<=0){ setAddStatus(sym+': no quote found — check the symbol (added anyway, in manual mode)','err'); }
+      else entry.p=c;
+      try{
+        const pr=await fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(key)}`);
+        if(pr.ok){ const pj=await pr.json(); if(pj&&pj.name) entry.n=pj.name; if(pj&&pj.finnhubIndustry) entry.sec=pj.finnhubIndustry; }
+      }catch(e){}
+    }catch(e){ if(e.message==='bad-key'){ setAddStatus('API key rejected — added in manual mode','err'); } }
+  }
+  customs.push(entry); saveCustoms();
+  state[sym]={price:entry.p,notes:'',live:!!(key&&entry.p)}; save();
+  document.getElementById('addSym').value='';
+  render();
+  if(entry.p) setAddStatus(sym+' added — '+entry.n+' @ $'+entry.p.toFixed(2),'ok');
+  else if(!key) setAddStatus(sym+' added in manual mode — type its price on the card','ok');
+}
+function removeTicker(sym){
+  customs=customs.filter(d=>d.t!==sym); saveCustoms();
+  delete state[sym]; save(); render();
+  setAddStatus(sym+' removed','ok');
+}
 
 function renderSaved(){
   const el=document.getElementById('savedLine');
@@ -328,14 +430,14 @@ function renderSaved(){
 }
 function renderStrip(){
   const byTier={1:0,2:0,3:0,4:0}; let ups=[];
-  DATA.forEach(d=>{ byTier[d.tier]++; const p=state[d.t]?.price; const u=upside(p,d.tgt); if(u!==null)ups.push(u); });
+  allData().forEach(d=>{ byTier[d.tier]++; const p=state[d.t]?.price; const u=upside(p,d.tgt); if(u!==null)ups.push(u); });
   const avg=ups.length?(ups.reduce((a,b)=>a+b,0)/ups.length):null;
   const s=document.getElementById('strip');
   s.innerHTML=`
-   <div class="stat"><div class="k">Names tracked</div><div class="v">${DATA.length}</div></div>
+   <div class="stat"><div class="k">Names tracked</div><div class="v">${allData().length}</div></div>
    <div class="stat"><div class="k">Tier 1 · value</div><div class="v">${byTier[1]} <small>/ ${byTier[2]} · ${byTier[3]} · ${byTier[4]}</small></div></div>
    <div class="stat"><div class="k">Avg upside to target</div><div class="v ${avg>=0?'':'neg'}" style="${avg>=0?'color:var(--pos)':''}">${avg===null?'—':(avg>=0?'+':'')+avg.toFixed(0)+'%'}</div></div>
-   <div class="stat"><div class="k">With price + target</div><div class="v">${ups.length}<small>/${DATA.length}</small></div></div>`;
+   <div class="stat"><div class="k">With price + target</div><div class="v">${ups.length}<small>/${allData().length}</small></div></div>`;
 }
 
 function card(d){
@@ -354,9 +456,16 @@ function card(d){
         <div class="co">${d.n}</div>
         <div class="sec">${d.sec}</div>
       </div>
-      <a class="quote" href="https://finance.yahoo.com/quote/${d.url}" target="_blank" rel="noopener">Live quote ↗</a>
+      <div style="display:flex;gap:6px;align-items:flex-start">
+        <button class="chart-btn" data-vchart="${d.t}">▾ Value</button>
+        <button class="chart-btn" data-chart="${d.t}">▾ Chart</button>
+        <a class="quote" href="https://finance.yahoo.com/quote/${d.url}" target="_blank" rel="noopener">Live quote ↗</a>
+      </div>
     </div>
-    <div class="tags">${d.tags.map(x=>`<span class="tag">${x}</span>`).join('')}</div>
+    <div class="chart-box" data-vchartbox="${d.t}"></div>
+    <div class="chart-box" data-chartbox="${d.t}"></div>
+    <div class="tags">${d.tags.map(x=>`<span class="tag">${x}</span>`).join('')}${d.custom?`<button class="tag" data-rm="${d.t}" title="Remove from watchlist" style="cursor:pointer;color:var(--neg);border-color:rgba(229,107,95,.4);background:transparent">✕ remove</button>`:''}</div>
+    ${d.custom?`<div class="metrics" style="grid-template-columns:1fr 1fr 1fr 1fr">${[['tgt','Target $'],['eps','EPS ttm'],['lo','52w low'],['hi','52w high']].map(([f,l])=>`<div class="m"><div class="mk">${l}</div><input class="price-in" style="width:100%;font-size:13px;padding:4px 6px" type="number" step="0.01" inputmode="decimal" value="${d[f]??''}" data-tkr="${d.t}" data-field="${f}" placeholder="—"></div>`).join('')}</div>`:''}
     <div class="price-row">
       <label>Price $</label>
       <input class="price-in" type="number" step="0.01" inputmode="decimal" value="${p??''}" data-tkr="${d.t}" placeholder="add">
@@ -369,10 +478,33 @@ function card(d){
       <div class="m"><div class="mk">Pos. in 52-wk</div><div class="mv ${rp===null?'mut':(rp>66?'neg':rp<34?'pos':'')}">${rp===null?'—':rp.toFixed(0)+'%'}</div></div>
     </div>
     <div class="track-wrap">${track}</div>
+    ${(()=>{ const L=lynch(d); const b=basisOf(d); const mv=b==='ipe'?effIpe(d):effGr(d);
+      return `<div class="lynch" data-lynch="${d.t}">
+        <span class="lk">Lynch line</span>
+        <select class="rank basis" data-tkr="${d.t}" style="font-size:11px">
+          <option value="gr" ${b==='gr'?'selected':''}>growth %</option>
+          <option value="ipe" ${b==='ipe'?'selected':''}>ind. P/E</option>
+        </select>
+        <input class="gr-in" type="number" step="1" min="1" max="99" inputmode="numeric" value="${mv??''}" data-tkr="${d.t}" data-gr="1" placeholder="—">
+        <span class="lv">${L?'$'+L.fv.toFixed(L.fv<20?2:0):'—'}</span>
+        ${L&&L.prem!==null
+          ? `<span class="lprem ${L.prem<=0?'below':'above'}">${L.prem<=0?(-L.prem).toFixed(0)+'% below line':'+'+L.prem.toFixed(0)+'% above line'}</span>`
+          : `<span class="lprem none">${num(d.eps)===null||d.eps<=0?'no earnings — no line':'set multiple'}</span>`}
+      </div>`; })()}
     <div class="foot">
       <div class="cat"><span class="clbl">Next catalyst</span>${d.cat}</div>
       <div class="risk"><span class="clbl">Key risk</span>${d.risk}</div>
       <span class="insider ${d.ins}">${insTxt}</span>
+      <div class="ranks">
+        <span class="rank-lbl">Safety</span>
+        <select class="rank ${st.safety?'r'+st.safety:''}" data-tkr="${d.t}" data-rank="safety">
+          <option value="">—</option>${[1,2,3,4,5].map(r=>`<option value="${r}" ${st.safety==r?'selected':''}>${r}</option>`).join('')}
+        </select>
+        <span class="rank-lbl">Fin. Strength</span>
+        <select class="rank ${st.fs?('g'+st.fs[0]):''}" data-tkr="${d.t}" data-rank="fs">
+          <option value="">—</option>${['A++','A+','A','B++','B+','B','C++','C+','C'].map(g=>`<option value="${g}" ${st.fs===g?'selected':''}>${g}</option>`).join('')}
+        </select>
+      </div>
       <textarea class="notes" data-tkr="${d.t}" placeholder="Your notes — thesis, price alerts, questions…">${st.notes||''}</textarea>
     </div>
   </div>`;
@@ -385,11 +517,13 @@ function render(){
   let html='';
   [1,2,3,4].forEach(tier=>{
     if(filterTier!=='all' && String(tier)!==filterTier) return;
-    let items=DATA.filter(d=>d.tier===tier)
+    let items=allData().filter(d=>d.tier===tier)
       .filter(d=> !q || d.t.toLowerCase().includes(q) || d.n.toLowerCase().includes(q));
     // sort within tier
     items.sort((a,b)=>{
       if(sortBy==='name') return a.t.localeCompare(b.t);
+      if(sortBy==='safety'){ const sa=state[a.t]?.safety, sb=state[b.t]?.safety;
+        if(sa==null)return 1; if(sb==null)return -1; return sa-sb; }
       if(sortBy==='pe'){ const pa=pe(state[a.t]?.price,a.eps), pb=pe(state[b.t]?.price,b.eps);
         if(pa===null)return 1; if(pb===null)return -1; return pa-pb; }
       const ua=upside(state[a.t]?.price,a.tgt), ub=upside(state[b.t]?.price,b.tgt);
@@ -413,10 +547,92 @@ function render(){
 function wire(){
   document.querySelectorAll('.price-in').forEach(inp=>{
     inp.addEventListener('input',e=>{
-      const t=e.target.dataset.tkr; const v=e.target.value;
-      state[t]=state[t]||{}; state[t].price = v===''?null:Number(v);
-      // live-update just this card + strip without full rerender (keep focus)
+      const t=e.target.dataset.tkr; const v=e.target.value; const f=e.target.dataset.field;
+      if(f){ // editable custom metric (tgt/eps/lo/hi)
+        const d=customs.find(x=>x.t===t); if(!d)return;
+        d[f]= v===''?null:Number(v); saveCustoms();
+        updateCard(t); renderStrip(); return;
+      }      state[t]=state[t]||{}; state[t].price = v===''?null:Number(v);
+      if(state[t].live) state[t].live=false; // manual edit overrides live tag
       updateCard(t); renderStrip(); save();
+    });
+  });
+  document.querySelectorAll('.price-in[data-field]').forEach(inp=>{
+    inp.addEventListener('blur',()=>render());
+  });
+  document.querySelectorAll('[data-rm]').forEach(b=>{
+    b.addEventListener('click',e=>{
+      const sym=e.target.dataset.rm;
+      if(confirm('Remove '+sym+' from the watchlist?')) removeTicker(sym);
+    });
+  });
+  document.querySelectorAll('.chart-btn[data-vchart]').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      const t=e.target.dataset.vchart;
+      const box=document.querySelector(`.chart-box[data-vchartbox="${t}"]`);
+      if(!box)return;
+      const open=box.classList.toggle('show');
+      e.target.classList.toggle('open',open);
+      e.target.textContent = open?'▴ Value':'▾ Value';
+      if(open){ box.innerHTML=lynchSVG(t); box.style.minHeight='0'; }
+    });
+  });
+  document.querySelectorAll('.chart-btn[data-chart]').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      const t=e.target.dataset.chart;
+      const box=document.querySelector(`.chart-box[data-chartbox="${t}"]`);
+      if(!box)return;
+      const open=box.classList.toggle('show');
+      e.target.classList.toggle('open',open);
+      e.target.textContent = open?'▴ Chart':'▾ Chart';
+      if(open && !box.dataset.loaded){
+        box.dataset.loaded='1';
+        box.innerHTML='<div class="loadin">Loading chart…</div>';
+        const wrap=document.createElement('div');
+        wrap.className='tradingview-widget-container';
+        const inner=document.createElement('div');
+        inner.className='tradingview-widget-container__widget';
+        wrap.appendChild(inner);
+        const s=document.createElement('script');
+        s.type='text/javascript'; s.async=true;
+        s.src='https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js';
+        s.textContent=JSON.stringify({
+          symbol:t, width:'100%', height:220, locale:'en', dateRange:'12M',
+          colorTheme:'dark', isTransparent:true, autosize:false, largeChartUrl:''
+        });
+        wrap.appendChild(s);
+        box.innerHTML=''; box.appendChild(wrap);
+      }
+    });
+  });
+  document.querySelectorAll('.gr-in').forEach(inp=>{
+    inp.addEventListener('input',e=>{
+      const t=e.target.dataset.tkr; const v=e.target.value;
+      const d=allData().find(x=>x.t===t); if(!d)return;
+      state[t]=state[t]||{};
+      const field = basisOf(d)==='ipe' ? 'ipe' : 'gr';
+      state[t][field] = v===''?null:Number(v);
+      updateLynch(t); save();
+    });
+  });
+  document.querySelectorAll('select.basis').forEach(sel=>{
+    sel.addEventListener('change',e=>{
+      const t=e.target.dataset.tkr; const d=allData().find(x=>x.t===t); if(!d)return;
+      state[t]=state[t]||{}; state[t].basis=e.target.value;
+      // swap the visible multiple to the newly active basis
+      const row=e.target.closest('.lynch'); const inp=row.querySelector('.gr-in');
+      const mv = e.target.value==='ipe' ? effIpe(d) : effGr(d);
+      inp.value = mv??'';
+      updateLynch(t); save();
+    });
+  });
+  document.querySelectorAll('select.rank[data-rank]').forEach(sel=>{
+    sel.addEventListener('change',e=>{
+      const t=e.target.dataset.tkr, kind=e.target.dataset.rank, v=e.target.value;
+      state[t]=state[t]||{};
+      if(kind==='safety'){ state[t].safety = v===''?null:Number(v); e.target.className='rank '+(v?'r'+v:''); }
+      else { state[t].fs = v===''?null:v; e.target.className='rank '+(v?('g'+v[0]):''); }
+      save();
     });
   });
   document.querySelectorAll('.notes').forEach(ta=>{
@@ -425,15 +641,78 @@ function wire(){
     });
   });
 }
+function lynchSVG(t){
+  const d=allData().find(x=>x.t===t); if(!d)return '';
+  const e=num(d.eps), g=effGr(d), b=basisOf(d);
+  const mult = b==='ipe' ? effIpe(d) : effGr(d);
+  const p=num(state[t]?.price);
+  if(e===null||e<=0) return '<div class="loadin">No earnings — no Lynch line can be drawn. (His point exactly.)</div>';
+  if(g===null||g<=0) return '<div class="loadin">Set a growth % on the Lynch row first — the projection needs it.</div>';
+  if(mult===null||mult<=0) return '<div class="loadin">Set the multiple (growth % or industry P/E) first.</div>';
+  const YRS=5, W=560, H=230, mL=52, mR=14, mT=18, mB=30;
+  const iw=W-mL-mR, ih=H-mT-mB;
+  const fv=t2=>e*Math.pow(1+g/100,t2)*mult;
+  const vals=[fv(0),fv(YRS)]; if(p!==null)vals.push(p);
+  let ymin=Math.min(...vals)*0.75, ymax=Math.max(...vals)*1.18;
+  const ly=v=>mT+ih-( (Math.log(v)-Math.log(ymin))/(Math.log(ymax)-Math.log(ymin)) )*ih;
+  const lx=t2=>mL+(t2/YRS)*iw;
+  let pts=''; for(let i=0;i<=20;i++){const tt=i/20*YRS; pts+=(i?' L':'M')+lx(tt).toFixed(1)+' '+ly(fv(tt)).toFixed(1);}
+  // gridlines: 3 log-spaced
+  let grid='';
+  for(let i=1;i<=3;i++){
+    const v=Math.exp(Math.log(ymin)+(Math.log(ymax)-Math.log(ymin))*i/4);
+    grid+=`<line x1="${mL}" x2="${W-mR}" y1="${ly(v)}" y2="${ly(v)}" stroke="#26344b" stroke-width="1"/>
+      <text x="${mL-6}" y="${ly(v)+3}" text-anchor="end" font-size="9" fill="#5f6f8c" font-family="monospace">$${v>=100?v.toFixed(0):v.toFixed(v>=20?0:1)}</text>`;
+  }
+  // year ticks
+  let xt=''; for(let yv=0;yv<=YRS;yv++){ xt+=`<text x="${lx(yv)}" y="${H-10}" text-anchor="middle" font-size="9" fill="#5f6f8c" font-family="monospace">${yv?'+'+yv+'y':'now'}</text>`; }
+  // price line + verdict
+  let priceLine='', verdict='';
+  if(p!==null){
+    priceLine=`<line x1="${mL}" x2="${W-mR}" y1="${ly(p)}" y2="${ly(p)}" stroke="#e0aa4e" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <circle cx="${lx(0)}" cy="${ly(p)}" r="4" fill="#e0aa4e"/>
+      <text x="${W-mR-2}" y="${ly(p)-5}" text-anchor="end" font-size="10" fill="#e0aa4e" font-family="monospace">price $${p>=100?p.toFixed(0):p.toFixed(2)}</text>`;
+    const fv0=fv(0);
+    if(p<=fv0){ verdict=((fv0-p)/p*100).toFixed(0)+'% upside to today\'s line — below the line (Lynch buy zone)'; }
+    else{
+      const tc=Math.log(p/fv0)/Math.log(1+g/100);
+      verdict = tc<=YRS
+        ? 'price is above the line — earnings catch up in ~'+tc.toFixed(1)+' yrs at '+g+'%/yr'
+        : 'price is far above the line — >'+YRS+' yrs of '+g+'% growth needed to justify it';
+      if(tc<=YRS){ priceLine+=`<circle cx="${lx(tc)}" cy="${ly(p)}" r="4" fill="none" stroke="#40b98a" stroke-width="2"/>`; }
+    }
+  } else verdict='enter a price to compare against the line';
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">
+    ${grid}${xt}
+    <path d="${pts}" fill="none" stroke="#40b98a" stroke-width="2"/>
+    <text x="${lx(YRS)-4}" y="${ly(fv(YRS))-7}" text-anchor="end" font-size="10" fill="#40b98a" font-family="monospace">earnings line: EPS×${mult} @ ${g}%/yr</text>
+    ${priceLine}
+    <text x="${mL}" y="${mT-6}" font-size="10" fill="#8b9ab4" font-family="monospace">${verdict}</text>
+  </svg>`;
+}
+function updateLynch(t){  const d=allData().find(x=>x.t===t); const row=document.querySelector(`.lynch[data-lynch="${t}"]`); if(!d||!row)return;
+  const L=lynch(d);
+  const lv=row.querySelector('.lv'), lp=row.querySelector('.lprem');
+  lv.textContent = L?'$'+L.fv.toFixed(L.fv<20?2:0):'—';
+  if(L&&L.prem!==null){
+    lp.className='lprem '+(L.prem<=0?'below':'above');
+    lp.textContent = L.prem<=0?(-L.prem).toFixed(0)+'% below line':'+'+L.prem.toFixed(0)+'% above line';
+  }else{
+    lp.className='lprem none';
+    lp.textContent = (num(d.eps)===null||d.eps<=0)?'no earnings — no line':'set multiple';
+  }
+}
 function updateCard(t){
-  const d=DATA.find(x=>x.t===t); const el=document.querySelector(`.card[data-tkr="${t}"]`); if(!el)return;
+  const d=allData().find(x=>x.t===t); const el=document.querySelector(`.card[data-tkr="${t}"]`); if(!el)return;
   const p=state[t]?.price;
   const u=upside(p,d.tgt), pev=pe(p,d.eps), rp=rangePct(p,d.lo,d.hi);
   const ms=el.querySelectorAll('.m .mv');
   ms[0].textContent = pev===null?'—':pev.toFixed(1)+'×'; ms[0].className='mv '+(pev===null?'mut':'');
+  ms[1].textContent = d.tgt?'$'+d.tgt:'—'; ms[1].className='mv '+(d.tgt?'':'mut');
   ms[2].textContent = u===null?'—':(u>=0?'+':'')+u.toFixed(0)+'%'; ms[2].className='mv '+(u===null?'mut':(u>=0?'pos':'neg'));
   ms[3].textContent = rp===null?'—':rp.toFixed(0)+'%'; ms[3].className='mv '+(rp===null?'mut':(rp>66?'neg':rp<34?'pos':''));
   const mark=el.querySelector('.track .mark'); if(mark&&rp!==null) mark.style.left=rp+'%';
+  updateLynch(t);
 }
 
 // controls
@@ -458,6 +737,10 @@ document.getElementById('saveKey').addEventListener('click',()=>{
 });
 document.getElementById('refresh').addEventListener('click',refreshAll);
 keyInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ setKey(keyInput.value.trim()); refreshAll(); }});
+
+// add-ticker controls
+document.getElementById('addBtn').addEventListener('click',addTicker);
+document.getElementById('addSym').addEventListener('keydown',e=>{ if(e.key==='Enter') addTicker(); });
 
 load();
 if(getKey()) refreshAll();   // auto-pull live prices on open when a key exists
